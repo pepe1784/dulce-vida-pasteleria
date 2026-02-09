@@ -1,38 +1,67 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { db } from "./db";
+import { products, orders, orderItems, type Product, type InsertProduct, type Order, type InsertOrder, type OrderItem, type InsertOrderItem } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getProducts(): Promise<Product[]>;
+  getProduct(id: number): Promise<Product | undefined>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  createOrder(userId: string, items: { productId: number; quantity: number }[]): Promise<Order>;
+  getOrders(userId: string): Promise<Order[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getProducts(): Promise<Product[]> {
+    return await db.select().from(products);
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getProduct(id: number): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async createProduct(product: InsertProduct): Promise<Product> {
+    const [newProduct] = await db.insert(products).values(product).returning();
+    return newProduct;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async createOrder(userId: string, items: { productId: number; quantity: number }[]): Promise<Order> {
+    // Calculate total and verify stock (simplified for now)
+    let total = 0;
+    const productList = await this.getProducts();
+    const productMap = new Map(productList.map(p => [p.id, p]));
+
+    for (const item of items) {
+      const product = productMap.get(item.productId);
+      if (product) {
+        total += Number(product.price) * item.quantity;
+      }
+    }
+
+    const [order] = await db.insert(orders).values({
+      userId,
+      total: total.toString(),
+      status: "completed", // Auto-complete for demo
+    }).returning();
+
+    for (const item of items) {
+       const product = productMap.get(item.productId);
+       if(product) {
+           await db.insert(orderItems).values({
+               orderId: order.id,
+               productId: item.productId,
+               quantity: item.quantity,
+               price: product.price
+           });
+       }
+    }
+
+    return order;
+  }
+
+  async getOrders(userId: string): Promise<Order[]> {
+    return await db.select().from(orders).where(eq(orders.userId, userId));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
