@@ -28,9 +28,9 @@ export function Navigation() {
   }, []);
 
   const navLinks = [
-    { href: "/", label: "Home" },
-    { href: "/#products", label: "Menu" },
-    { href: "/about", label: "About" },
+    { href: "/", label: "Inicio" },
+    { href: "/#products", label: "Menú" },
+    { href: "/about", label: "Nosotros" },
   ];
 
   return (
@@ -122,12 +122,12 @@ export function Navigation() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 p-2">
                 <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-                  Hello, {user.firstName || "Guest"}
+                  Hola, {user.firstName || "Invitado"}
                 </div>
                 <DropdownMenuSeparator />
                 <Link href="/orders">
                   <DropdownMenuItem className="cursor-pointer">
-                    Your Orders
+                    Mis Pedidos
                   </DropdownMenuItem>
                 </Link>
                 <DropdownMenuItem 
@@ -135,14 +135,14 @@ export function Navigation() {
                   onClick={() => logout()}
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
+                  Cerrar Sesión
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
             <a href="/api/login">
               <Button variant="ghost" size="sm" className="hidden sm:flex font-medium">
-                Sign In
+                Iniciar Sesión
               </Button>
               <Button variant="ghost" size="icon" className="sm:hidden">
                 <User className="h-5 w-5" />

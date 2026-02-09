@@ -32,8 +32,8 @@ export default function Orders() {
       <Navigation />
       
       <div className="container-custom pt-32">
-        <h1 className="text-4xl font-display mb-2">My Orders</h1>
-        <p className="text-muted-foreground mb-10">Track and manage your past purchases.</p>
+        <h1 className="text-4xl font-display mb-2">Mis Pedidos</h1>
+        <p className="text-muted-foreground mb-10">Sigue y gestiona tus compras pasadas.</p>
 
         {ordersLoading ? (
            <div className="flex justify-center py-20">
@@ -44,12 +44,12 @@ export default function Orders() {
             <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
                 <Package className="w-10 h-10 text-muted-foreground" />
             </div>
-            <h2 className="text-2xl font-display mb-2">No orders yet</h2>
+            <h2 className="text-2xl font-display mb-2">Sin pedidos aún</h2>
             <p className="text-muted-foreground mb-8">
-              Looks like you haven't indulged in any sweets yet.
+              Parece que aún no te has dado ningún capricho dulce.
             </p>
             <Link href="/">
-                <Button className="btn-primary">Browse Menu</Button>
+                <Button className="btn-primary">Ver Menú</Button>
             </Link>
           </div>
         ) : (
@@ -61,11 +61,11 @@ export default function Orders() {
               >
                 <div className="space-y-1">
                     <div className="flex items-center gap-3">
-                        <span className="font-display font-bold text-lg">Order #{order.id}</span>
+                        <span className="font-display font-bold text-lg">Pedido #{order.id}</span>
                         <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
                             order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
                         }`}>
-                            {order.status}
+                            {order.status === 'pending' ? 'pendiente' : 'completado'}
                         </span>
                     </div>
                     <div className="flex items-center text-sm text-muted-foreground gap-4">
@@ -79,7 +79,7 @@ export default function Orders() {
                 </div>
                 
                 <Button variant="outline" className="group">
-                    View Details <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    Ver Detalles <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </div>
             ))}

@@ -23,26 +23,26 @@ export default function Home() {
           <div className="space-y-8 animate-in fade-in slide-in-from-left-10 duration-1000">
             <div className="inline-block px-4 py-1.5 rounded-full border border-primary/20 bg-white/50 backdrop-blur-sm">
                 <span className="text-sm font-medium text-primary tracking-wide uppercase">
-                    Artisanal Pastry Shop
+                    Pastelería Artesanal
                 </span>
             </div>
             <h1 className="text-6xl lg:text-8xl font-display leading-[1.1]">
-              Sweet <span className="text-primary italic font-handwriting">moments</span>,<br />
-              baked with love.
+              Dulces <span className="text-primary italic font-handwriting">momentos</span>,<br />
+              horneados con amor.
             </h1>
             <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
-              Experience the perfect blend of tradition and innovation. 
-              Our handcrafted pastries are designed to delight your senses 
-              and elevate your everyday moments.
+              Vive la mezcla perfecta de tradición e innovación. 
+              Nuestros postres artesanales están diseñados para deleitar tus sentidos 
+              y elevar tus momentos cotidianos.
             </p>
             <div className="flex gap-4 pt-4">
               <Button size="lg" className="btn-primary h-14 px-8 text-base" onClick={() => {
                 document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
               }}>
-                Order Now
+                Pedir Ahora
               </Button>
               <Button size="lg" variant="outline" className="h-14 px-8 text-base border-primary/20 hover:bg-primary/5">
-                Our Story
+                Nuestra Historia
               </Button>
             </div>
           </div>
@@ -74,9 +74,9 @@ export default function Home() {
       <section id="products" className="py-24 bg-white relative">
         <div className="container-custom">
           <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-            <h2 className="text-4xl md:text-5xl font-display">Our Creations</h2>
+            <h2 className="text-4xl md:text-5xl font-display">Nuestras Creaciones</h2>
             <p className="text-muted-foreground">
-                Handpicked favorites from our master bakers. Each piece is a unique work of art.
+                Favoritos seleccionados por nuestros maestros panaderos. Cada pieza es una obra de arte única.
             </p>
           </div>
 
@@ -86,7 +86,7 @@ export default function Home() {
             </div>
           ) : error ? (
             <div className="text-center text-destructive py-10">
-                Failed to load products. Please try again later.
+                Error al cargar los productos. Por favor, inténtelo de nuevo más tarde.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
@@ -104,24 +104,24 @@ export default function Home() {
             <div>
                 <span className="font-handwriting text-3xl text-primary block mb-4">Endulzarte</span>
                 <p className="text-secondary/60 leading-relaxed">
-                    Bringing sweetness to your life, one pastry at a time. 
-                    Visit us for a taste of happiness.
+                    Dulzura para tu vida, un postre a la vez. 
+                    Visítanos para probar la felicidad.
                 </p>
             </div>
             <div>
-                <h4 className="font-display text-xl mb-6 text-white">Contact</h4>
+                <h4 className="font-display text-xl mb-6 text-white">Contacto</h4>
                 <ul className="space-y-3 text-secondary/60">
-                    <li>123 Baker Street, Sweet City</li>
-                    <li>hello@endulzarte.com</li>
+                    <li>Calle Panadero 123, Ciudad Dulce</li>
+                    <li>hola@endulzarte.com</li>
                     <li>+1 (555) 123-4567</li>
                 </ul>
             </div>
             <div>
-                <h4 className="font-display text-xl mb-6 text-white">Hours</h4>
+                <h4 className="font-display text-xl mb-6 text-white">Horarios</h4>
                 <ul className="space-y-3 text-secondary/60">
-                    <li className="flex justify-between"><span>Mon - Fri</span> <span>7:00 AM - 8:00 PM</span></li>
-                    <li className="flex justify-between"><span>Sat</span> <span>8:00 AM - 9:00 PM</span></li>
-                    <li className="flex justify-between"><span>Sun</span> <span>8:00 AM - 6:00 PM</span></li>
+                    <li className="flex justify-between"><span>Lun - Vie</span> <span>7:00 AM - 8:00 PM</span></li>
+                    <li className="flex justify-between"><span>Sáb</span> <span>8:00 AM - 9:00 PM</span></li>
+                    <li className="flex justify-between"><span>Dom</span> <span>8:00 AM - 6:00 PM</span></li>
                 </ul>
             </div>
         </div>

@@ -21,7 +21,7 @@ export function CartDrawer() {
         <SheetHeader className="p-6 border-b border-border/40">
           <SheetTitle className="font-display text-2xl flex items-center gap-2">
             <ShoppingBag className="h-5 w-5 text-primary" />
-            Your Cart
+            Tu Carrito
           </SheetTitle>
         </SheetHeader>
 
@@ -32,13 +32,13 @@ export function CartDrawer() {
                 <ShoppingBag className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
-                <h3 className="text-lg font-medium">Your cart is empty</h3>
+                <h3 className="text-lg font-medium">Tu carrito está vacío</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Looks like you haven't added any sweet treats yet.
+                  Parece que aún no has añadido ningún dulce regalo.
                 </p>
               </div>
               <Button variant="outline" onClick={toggleCart}>
-                Start Shopping
+                Empezar a comprar
               </Button>
             </div>
           ) : (
@@ -112,7 +112,7 @@ export function CartDrawer() {
                 className="w-full btn-primary h-12 text-base" 
                 onClick={handleCheckout}
               >
-                Proceed to Checkout
+                Continuar al Pago
               </Button>
             </div>
           </SheetFooter>

@@ -16,8 +16,8 @@ export function ProductCard({ product }: ProductCardProps) {
   const handleAddToCart = () => {
     addItem(product);
     toast({
-      title: "Added to cart",
-      description: `${product.name} is now in your cart.`,
+      title: "Añadido al carrito",
+      description: `${product.name} ya está en tu carrito.`,
       duration: 2000,
     });
   };
@@ -41,7 +41,7 @@ export function ProductCard({ product }: ProductCardProps) {
                 onClick={handleAddToCart}
                 className="translate-y-4 group-hover:translate-y-0 transition-transform duration-300 bg-white text-foreground hover:bg-white/90 rounded-full font-bold px-6 shadow-lg"
             >
-                <Plus className="mr-2 h-4 w-4" /> Add to Cart
+                <Plus className="mr-2 h-4 w-4" /> Añadir al Carrito
             </Button>
         </div>
       </div>

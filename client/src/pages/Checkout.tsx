@@ -38,8 +38,8 @@ export default function Checkout() {
         onSuccess: () => {
           clearCart();
           toast({
-            title: "Order Placed!",
-            description: "Thank you for your purchase. Your treats are on the way!",
+            title: "¡Pedido Realizado!",
+            description: "Gracias por su compra. ¡Sus dulces están en camino!",
           });
           setLocation("/orders");
         },
@@ -70,10 +70,10 @@ export default function Checkout() {
       
       <div className="container-custom pt-32">
         <Link href="/" className="inline-flex items-center text-muted-foreground hover:text-primary mb-8 transition-colors">
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Shop
+            <ArrowLeft className="w-4 h-4 mr-2" /> Volver a la Tienda
         </Link>
         
-        <h1 className="text-4xl font-display mb-10">Checkout</h1>
+        <h1 className="text-4xl font-display mb-10">Pago</h1>
 
         <div className="grid lg:grid-cols-2 gap-12">
           {/* Left Column: Form */}
@@ -81,16 +81,16 @@ export default function Checkout() {
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-border/50">
               <h2 className="text-xl font-display mb-6 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-primary" />
-                Contact Information
+                Información de Contacto
               </h2>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label>First Name</Label>
+                        <Label>Nombre</Label>
                         <Input value={user.firstName || ""} disabled className="bg-muted/50" />
                     </div>
                     <div className="space-y-2">
-                        <Label>Last Name</Label>
+                        <Label>Apellidos</Label>
                         <Input value={user.lastName || ""} disabled className="bg-muted/50" />
                     </div>
                 </div>
@@ -99,15 +99,15 @@ export default function Checkout() {
                     <Input value={user.email || ""} disabled className="bg-muted/50" />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                    Logged in as {user.email}. Not you? <a href="/api/logout" className="underline text-primary">Log out</a>
+                    Sesión iniciada como {user.email}. ¿No eres tú? <a href="/api/logout" className="underline text-primary">Cerrar sesión</a>
                 </p>
               </div>
             </div>
 
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-border/50 opacity-75 grayscale">
-                <h2 className="text-xl font-display mb-4">Payment</h2>
+                <h2 className="text-xl font-display mb-4">Pago</h2>
                 <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground text-center border border-dashed border-border">
-                    This is a demo store. No payment required.
+                    Esta es una tienda de demostración. No se requiere pago.
                 </div>
             </div>
           </div>
@@ -115,7 +115,7 @@ export default function Checkout() {
           {/* Right Column: Order Summary */}
           <div className="lg:sticky lg:top-32 h-fit">
             <div className="bg-white p-8 rounded-2xl shadow-lg border border-primary/10">
-              <h2 className="text-xl font-display mb-6">Order Summary</h2>
+              <h2 className="text-xl font-display mb-6">Resumen del Pedido</h2>
               
               <div className="space-y-4 mb-6">
                 {items.map((item) => (
@@ -128,7 +128,7 @@ export default function Checkout() {
                         <span className="font-display">{item.name}</span>
                         <span>${(Number(item.price) * item.quantity).toFixed(2)}</span>
                       </div>
-                      <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                      <p className="text-sm text-muted-foreground">Cant: {item.quantity}</p>
                     </div>
                   </div>
                 ))}
@@ -142,7 +142,7 @@ export default function Checkout() {
                   <span>${total.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax (Estimated)</span>
+                  <span className="text-muted-foreground">Impuestos (Estimado)</span>
                   <span>${(total * 0.08).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-lg pt-4 border-t mt-4">
@@ -158,10 +158,10 @@ export default function Checkout() {
               >
                 {isCreatingOrder ? (
                     <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...
                     </>
                 ) : (
-                    "Place Order"
+                    "Realizar Pedido"
                 )}
               </Button>
             </div>
