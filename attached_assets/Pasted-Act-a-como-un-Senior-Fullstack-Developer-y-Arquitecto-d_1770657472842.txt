@@ -1,0 +1,49 @@
+Actúa como un Senior Fullstack Developer y Arquitecto de Software.
+
+Objetivo: Construye una plataforma de E-commerce de alto rendimiento inspirada en el diseño minimalista de [Kukara.mx / Amazon] para vender [Menciona tu producto, ej: gadgets tecnológicos].
+
+1. Stack Tecnológico (Portabilidad):
+
+Frontend: Next.js (App Router), Tailwind CSS para el estilado y Lucide React para iconos.
+
+Componentes: Usa Shadcn/ui para elementos de interfaz consistentes y profesionales.
+
+Estado: React Context o Zustand para el carrito de compras.
+
+Backend: Supabase para Autenticación y Base de Datos (PostgreSQL).
+
+2. Diseño UI/UX (Estilo Kukara/Premium):
+
+Crea una interfaz limpia con mucho espacio en blanco, tipografía Sans-Serif moderna y bordes suavizados.
+
+Layout: Header pegajoso (sticky) con buscador funcional, sección Hero con imágenes de alta calidad, y una cuadrícula de productos responsiva (1 col móvil, 3-4 cols desktop).
+
+Interactividad: Implementa esqueletos de carga (skeleton screens) y animaciones sutiles al pasar el mouse por los productos.
+
+3. Estructura de la Base de Datos (Segura):
+
+Configura las siguientes tablas en Supabase:
+
+products: (id, name, description, price, stock, image_url, category).
+
+profiles: (id, full_name, avatar_url, email) vinculada a Supabase Auth.
+
+orders: (id, user_id, total, status, created_at).
+
+Seguridad: Implementa Row Level Security (RLS) para que los usuarios solo vean sus propios pedidos.
+
+4. Funcionalidades Críticas:
+
+Carrito: Funcionalidad de añadir, eliminar y persistir productos en el LocalStorage.
+
+Checkout: Crea una página de resumen de compra profesional con validación de formularios.
+
+Filtros: Barra de búsqueda lateral o superior que filtre productos por categoría y precio en tiempo real.
+
+5. Instrucción de Código:
+
+Utiliza variables de entorno (.env.local) para todas las llaves de API.
+
+Separa la lógica de los componentes (clean architecture). No mezcles la conexión a la base de datos dentro de los archivos de vista.
+
+¿Puedes empezar generando la estructura de carpetas y el esquema de la base de datos?
