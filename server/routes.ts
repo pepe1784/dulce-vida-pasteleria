@@ -27,13 +27,13 @@ export async function registerRoutes(
   });
 
   app.post(api.orders.create.path, async (req, res) => {
-    if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-    }
+    // En desarrollo sin autenticación, usar un ID de usuario por defecto
+    const userId = req.isAuthenticated() 
+      ? (req.user as any).claims.sub 
+      : 'dev-user-' + Date.now();
 
     try {
         const input = api.orders.create.input.parse(req.body);
-        const userId = (req.user as any).claims.sub;
         const order = await storage.createOrder(userId, input.items);
         res.status(201).json(order);
     } catch (err) {
@@ -45,8 +45,9 @@ export async function registerRoutes(
   });
 
   app.get(api.orders.list.path, async (req, res) => {
+      // En desarrollo sin autenticación, no mostrar órdenes
       if (!req.isAuthenticated()) {
-          return res.status(401).json({ message: "Unauthorized" });
+          return res.json([]);
       }
       const userId = (req.user as any).claims.sub;
       const orders = await storage.getOrders(userId);

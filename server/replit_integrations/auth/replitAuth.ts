@@ -6,10 +6,16 @@ import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
+import memorystore from "memorystore";
 import { authStorage } from "./storage";
 
 const getOidcConfig = memoize(
   async () => {
+    // Solo intentar configurar OIDC si estamos en Replit
+    if (!process.env.REPL_ID) {
+      console.log("⚠️  REPL_ID no configurado. Autenticación de Replit deshabilitada.");
+      return null;
+    }
     return await client.discovery(
       new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
       process.env.REPL_ID!
@@ -20,21 +26,35 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
+  
+  let sessionStore;
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgresql')) {
+    // Usar PostgreSQL para las sesiones
+    const pgStore = connectPg(session);
+    sessionStore = new pgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: false,
+      ttl: sessionTtl,
+      tableName: "sessions",
+    });
+  } else {
+    // Usar memoria para desarrollo local
+    console.log("⚠️  Usando almacenamiento de sesiones en memoria (solo desarrollo)");
+    const MemoryStore = memorystore(session);
+    sessionStore = new MemoryStore({
+      checkPeriod: 86400000, // 24 horas
+      ttl: sessionTtl,
+    });
+  }
+  
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || 'dev-secret-change-this',
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: sessionTtl,
     },
   });
@@ -67,6 +87,28 @@ export async function setupAuth(app: Express) {
   app.use(passport.session());
 
   const config = await getOidcConfig();
+  
+  // Si no hay configuración OIDC, usar modo desarrollo simple
+  if (!config) {
+    console.log("🔧 Modo desarrollo: Autenticación simplificada activada");
+    passport.serializeUser((user: Express.User, cb) => cb(null, user));
+    passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+    
+    // Endpoint simple de login para desarrollo
+    app.get("/api/login", (req, res) => {
+      res.json({ message: "Auth no configurado. Configure REPL_ID para habilitar autenticación de Replit." });
+    });
+    
+    app.get("/api/callback", (req, res) => {
+      res.redirect("/");
+    });
+    
+    app.get("/api/logout", (req, res) => {
+      req.logout(() => res.redirect("/"));
+    });
+    
+    return;
+  }
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
