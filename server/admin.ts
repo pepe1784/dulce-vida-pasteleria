@@ -55,7 +55,13 @@ export function registerAdminRoutes(app: Express) {
         return res.status(400).json({ message: "Email y contraseña requeridos" });
       }
       const user = await storage.getAdminByEmail(email);
-      if (!user || !verifyPassword(password, user.passwordHash)) {
+      console.log(`🔐 Login attempt: email=${email}, userFound=${!!user}`);
+      if (!user) {
+        return res.status(401).json({ message: "Credenciales incorrectas" });
+      }
+      const passwordValid = verifyPassword(password, user.passwordHash);
+      console.log(`🔐 Password valid: ${passwordValid}`);
+      if (!passwordValid) {
         return res.status(401).json({ message: "Credenciales incorrectas" });
       }
       (req.session as any).adminUserId = user.id;

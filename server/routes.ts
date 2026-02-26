@@ -374,21 +374,29 @@ export async function registerRoutes(
     }
   }
 
-  // Seed administrador por defecto
+  // Seed administrador por defecto — SIEMPRE sincroniza contraseña con env var
   const defaultAdminEmail = process.env.ADMIN_EMAIL || "admin@endulzarte.com";
   const defaultAdminPass = process.env.ADMIN_PASSWORD || "admin123";
+  console.log(`🔐 Admin seed: email=${defaultAdminEmail}, passLength=${defaultAdminPass.length}`);
+  
+  const { scryptSync, randomBytes } = await import("crypto");
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(defaultAdminPass, salt, 64).toString("hex");
+  const passwordHash = `${salt}:${hash}`;
+  
   const adminExists = await storage.getAdminByEmail(defaultAdminEmail);
   if (!adminExists) {
-    const { scryptSync, randomBytes } = await import("crypto");
-    const salt = randomBytes(16).toString("hex");
-    const hash = scryptSync(defaultAdminPass, salt, 64).toString("hex");
     await storage.createAdmin({
       email: defaultAdminEmail,
-      passwordHash: `${salt}:${hash}`,
+      passwordHash,
       name: "Administrador",
       role: "admin",
     });
-    console.log(`Admin seed creado: ${defaultAdminEmail}`);
+    console.log(`✅ Admin creado: ${defaultAdminEmail}`);
+  } else {
+    // Siempre actualizar la contraseña para que coincida con el env var
+    await storage.updateAdmin(adminExists.id, { passwordHash });
+    console.log(`🔄 Admin password actualizado: ${defaultAdminEmail}`);
   }
 
   return httpServer;

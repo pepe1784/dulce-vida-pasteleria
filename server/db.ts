@@ -4,7 +4,12 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-const isPostgres = process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgresql');
+// Render usa postgres:// y pg library acepta ambos formatos
+const dbUrl = process.env.DATABASE_URL || '';
+const isPostgres = dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://');
+
+console.log(`🔍 DATABASE_URL prefix: ${dbUrl.substring(0, 15)}...`);
+console.log(`🔍 isPostgres: ${isPostgres}`);
 
 let pool: pg.Pool | null = null;
 let db: any;
