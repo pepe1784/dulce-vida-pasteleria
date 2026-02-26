@@ -17,7 +17,7 @@ export const products = pgTable("products", {
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull(), // References auth.users.id
+  userId: varchar("user_id").notNull(),
   total: numeric("total").notNull(),
   status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -25,10 +25,25 @@ export const orders = pgTable("orders", {
 
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
-  orderId: integer("order_id").notNull(), // References orders.id
-  productId: integer("product_id").notNull(), // References products.id
+  orderId: integer("order_id").notNull(),
+  productId: integer("product_id").notNull(),
   quantity: integer("quantity").notNull(),
-  price: numeric("price").notNull(), // Snapshot of price at time of order
+  price: numeric("price").notNull(),
+});
+
+export const adminUsers = pgTable("admin_users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("employee"),
+  createdAt: integer("created_at"),
+});
+
+export const siteSettings = pgTable("site_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at"),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
@@ -41,3 +56,5 @@ export type Order = typeof orders.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+export type AdminUser = typeof adminUsers.$inferSelect;
+export type SiteSetting = typeof siteSettings.$inferSelect;

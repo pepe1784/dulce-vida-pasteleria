@@ -11,3 +11,18 @@ vite.config.ts.*
 migrations/*.sql
 dev.db
 dev.db-journal
+
+# Backups
+*.bak
+
+# Uploads (user-generated content)
+uploads/*
+!uploads/.gitkeep
+
+# Replit leftover
+.replit
+server/replit_integrations/
+
+# OS files
+Thumbs.db
+*.log

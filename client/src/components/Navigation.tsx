@@ -1,25 +1,19 @@
 import { Link, useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
-import { useCart } from "@/hooks/use-cart";
-import { ShoppingBag, User, LogOut, Menu, X } from "lucide-react";
+import { Menu, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/hooks/use-settings";
 
 export function Navigation() {
-  const { user, logout } = useAuth();
-  const { items, toggleCart } = useCart();
   const [isScrolled, setIsScrolled] = useState(false);
   const [location] = useLocation();
-  const itemCount = items.reduce((acc, item) => acc + item.quantity, 0);
+  const { data: settings } = useSettings();
+
+  const whatsappUrl = settings?.whatsapp
+    ? `https://wa.me/${settings.whatsapp.replace(/[^0-9]/g, "")}?text=Hola%20Endulzarte%2C%20me%20gustar%C3%ADa%20hacer%20un%20pedido`
+    : "https://wa.me/5213123011075?text=Hola%20Endulzarte%2C%20me%20gustar%C3%ADa%20hacer%20un%20pedido";
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -28,18 +22,30 @@ export function Navigation() {
   }, []);
 
   const navLinks = [
-    { href: "/", label: "Inicio" },
-    { href: "/#products", label: "Menú" },
-    { href: "/about", label: "Nosotros" },
+    { href: "inicio", label: "Inicio" },
+    { href: "catalogo", label: "Catálogo" },
+    { href: "nosotros", label: "Nosotros" },
+    { href: "contacto", label: "Contacto" },
   ];
+
+  const scrollToSection = (id: string) => {
+    if (id === "inicio") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   return (
     <header
       className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-transparent",
         isScrolled || location !== "/"
-          ? "bg-white/90 backdrop-blur-md shadow-sm border-border/40 py-3"
-          : "bg-transparent py-6"
+          ? "bg-white/95 backdrop-blur-md shadow-sm border-border/40 py-3"
+          : "bg-white/40 backdrop-blur-sm py-5"
       )}
     >
       <div className="container-custom flex items-center justify-between">
@@ -53,12 +59,22 @@ export function Navigation() {
           <SheetContent side="left" className="w-[300px]">
             <nav className="flex flex-col gap-6 mt-10">
               {navLinks.map((link) => (
-                <Link key={link.href} href={link.href}>
-                  <span className="text-xl font-display cursor-pointer hover:text-primary transition-colors">
-                    {link.label}
-                  </span>
-                </Link>
+                <button
+                  key={link.href}
+                  onClick={() => scrollToSection(link.href)}
+                  className="text-xl font-display cursor-pointer hover:text-primary transition-colors text-left"
+                >
+                  {link.label}
+                </button>
               ))}
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary text-center mt-4"
+              >
+                <Phone className="mr-2 h-4 w-4 inline" /> Pedir por WhatsApp
+              </a>
             </nav>
           </SheetContent>
         </Sheet>
@@ -70,7 +86,7 @@ export function Navigation() {
               "font-handwriting text-2xl sm:text-3xl text-primary transition-all", 
               isScrolled ? "scale-90" : "scale-100"
             )}>
-              Pastelería
+              Postrería & Roll
             </span>
             <span className="font-display text-xl sm:text-2xl font-bold tracking-widest uppercase group-hover:text-primary/80 transition-colors">
               Endulzarte
@@ -81,74 +97,30 @@ export function Navigation() {
         {/* Desktop Nav */}
         <nav className="hidden lg:flex items-center gap-8">
           {navLinks.map((link) => (
-            <Link key={link.href} href={link.href} className="text-sm font-medium tracking-wide hover:text-primary transition-colors uppercase">
+            <button
+              key={link.href}
+              onClick={() => scrollToSection(link.href)}
+              className="text-sm font-medium tracking-wide hover:text-primary transition-colors uppercase cursor-pointer"
+            >
               {link.label}
-            </Link>
+            </button>
           ))}
         </nav>
 
-        {/* Actions */}
+        {/* CTA WhatsApp */}
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative hover:bg-primary/10 transition-colors"
-            onClick={toggleCart}
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            <ShoppingBag className="h-5 w-5" />
-            {itemCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full font-bold shadow-sm">
-                {itemCount}
-              </span>
-            )}
-          </Button>
-
-          {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  {user.profileImageUrl ? (
-                    <img
-                      src={user.profileImageUrl}
-                      alt={user.firstName || "User"}
-                      className="w-8 h-8 rounded-full border border-border"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 bg-primary/20 text-primary rounded-full flex items-center justify-center font-bold">
-                      {user.firstName?.[0] || "U"}
-                    </div>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 p-2">
-                <div className="px-2 py-1.5 text-sm font-medium text-muted-foreground">
-                  Hola, {user.firstName || "Invitado"}
-                </div>
-                <DropdownMenuSeparator />
-                <Link href="/orders">
-                  <DropdownMenuItem className="cursor-pointer">
-                    Mis Pedidos
-                  </DropdownMenuItem>
-                </Link>
-                <DropdownMenuItem 
-                  className="text-destructive focus:text-destructive cursor-pointer"
-                  onClick={() => logout()}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Cerrar Sesión
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <a href="/api/login">
-              <Button variant="ghost" size="sm" className="hidden sm:flex font-medium">
-                Iniciar Sesión
-              </Button>
-              <Button variant="ghost" size="icon" className="sm:hidden">
-                <User className="h-5 w-5" />
-              </Button>
-            </a>
-          )}
+            <Button className="btn-primary hidden sm:flex h-10 px-5 text-sm">
+              <Phone className="mr-2 h-4 w-4" /> Contáctanos
+            </Button>
+            <Button variant="ghost" size="icon" className="sm:hidden hover:bg-primary/10">
+              <Phone className="h-5 w-5 text-primary" />
+            </Button>
+          </a>
         </div>
       </div>
     </header>

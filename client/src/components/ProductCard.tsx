@@ -1,26 +1,14 @@
 import { Product } from "@shared/schema";
-import { Button } from "@/components/ui/button";
-import { useCart } from "@/hooks/use-cart";
-import { Plus } from "lucide-react";
 import { motion } from "framer-motion";
-import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/use-settings";
 
 interface ProductCardProps {
   product: Product;
 }
 
 export function ProductCard({ product }: ProductCardProps) {
-  const { addItem } = useCart();
-  const { toast } = useToast();
-
-  const handleAddToCart = () => {
-    addItem(product);
-    toast({
-      title: "Añadido al carrito",
-      description: `${product.name} ya está en tu carrito.`,
-      duration: 2000,
-    });
-  };
+  const { data: settings } = useSettings();
+  const waNumber = settings?.whatsapp?.replace(/[^0-9]/g, "") || "5213123011075";
 
   return (
     <motion.div
@@ -35,14 +23,13 @@ export function ProductCard({ product }: ProductCardProps) {
           alt={product.name}
           className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
           loading="lazy"
+          onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1495147466023-ac5c588e2e94?auto=format&fit=crop&q=80&w=400"; }}
         />
-        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-            <Button 
-                onClick={handleAddToCart}
-                className="translate-y-4 group-hover:translate-y-0 transition-transform duration-300 bg-white text-foreground hover:bg-white/90 rounded-full font-bold px-6 shadow-lg"
-            >
-                <Plus className="mr-2 h-4 w-4" /> Añadir al Carrito
-            </Button>
+        {/* Overlay con precio */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <span className="text-white font-display text-lg font-bold">
+            ${Number(product.price).toFixed(2)} MXN
+          </span>
         </div>
       </div>
       
@@ -51,7 +38,7 @@ export function ProductCard({ product }: ProductCardProps) {
             <span className="text-xs font-bold tracking-widest uppercase text-primary/80">
                 {product.category}
             </span>
-            <span className="font-display font-bold text-lg">
+            <span className="font-display font-bold text-lg text-primary">
                 ${Number(product.price).toFixed(2)}
             </span>
         </div>
@@ -61,6 +48,14 @@ export function ProductCard({ product }: ProductCardProps) {
         <p className="text-muted-foreground text-sm line-clamp-2 leading-relaxed">
           {product.description}
         </p>
+        <a
+          href={`https://wa.me/${waNumber}?text=Hola%20Endulzarte%2C%20me%20interesa%20${encodeURIComponent(product.name)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center justify-center w-full rounded-full bg-primary/10 text-primary px-4 py-2.5 text-sm font-semibold hover:bg-primary hover:text-white transition-all duration-300"
+        >
+          Consultar disponibilidad
+        </a>
       </div>
     </motion.div>
   );

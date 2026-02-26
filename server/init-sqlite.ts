@@ -15,7 +15,7 @@ export function initializeSqlite(dbPath: string = './dev.db') {
     CREATE INDEX IF NOT EXISTS IDX_session_expire ON sessions(expire);
   `);
   
-  // Crear tabla de usuarios
+  // Crear tabla de usuarios (legacy - keeping for compatibility)
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -62,6 +62,27 @@ export function initializeSqlite(dbPath: string = './dev.db') {
       price TEXT NOT NULL,
       FOREIGN KEY (order_id) REFERENCES orders(id),
       FOREIGN KEY (product_id) REFERENCES products(id)
+    );
+  `);
+
+  // Crear tabla de administradores
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'employee',
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );
+  `);
+
+  // Crear tabla de configuración del sitio
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS site_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
     );
   `);
   
