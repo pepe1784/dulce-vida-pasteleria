@@ -6,6 +6,7 @@ import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./admin";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { dbReady } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -81,6 +82,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Esperar a que la base de datos esté lista (SQLite carga dinámicamente en dev)
+  await dbReady;
+
   // Register admin routes first
   registerAdminRoutes(app);
 
