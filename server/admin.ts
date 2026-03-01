@@ -334,7 +334,7 @@ export function registerAdminRoutes(app: Express) {
       if (!order) return res.status(404).json({ message: "Pedido no encontrado" });
 
       const settings = await storage.getAllSettings();
-      const location = settings.location_text || "Colima, Colima, MÃ©xico";
+      const location = settings.location_text || "Colima, Colima, M\u00e9xico";
       const phone = settings.phone || "312 301 1075";
 
       const createdAt = order.createdAt
@@ -360,84 +360,142 @@ export function registerAdminRoutes(app: Express) {
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Ticket #${order.orderNumber}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticket ${order.orderNumber}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Courier New', monospace; font-size: 13px; color: #222; background: #fff; }
-    .ticket { max-width: 380px; margin: 0 auto; padding: 20px 16px; }
-    .header { text-align: center; border-bottom: 2px dashed #ccc; padding-bottom: 12px; margin-bottom: 12px; }
-    .header h1 { font-size: 22px; font-weight: bold; letter-spacing: 2px; }
-    .header p { font-size: 11px; color: #666; margin-top: 2px; }
-    .section { margin-bottom: 12px; border-bottom: 1px dashed #ccc; padding-bottom: 12px; }
-    .section:last-child { border-bottom: none; }
-    .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-    .label { color: #666; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; border-bottom: 1px solid #ccc; padding: 4px 2px; font-size: 11px; text-transform: uppercase; }
-    td { padding: 4px 2px; vertical-align: top; }
-    .total-section { font-weight: bold; font-size: 15px; }
-    .footer { text-align: center; font-size: 11px; color: #888; margin-top: 16px; }
+    body { font-family: 'Courier New', monospace; font-size: 13px; color: #1a1a1a; background: #f5f5f5; }
+    .page { display: flex; align-items: flex-start; justify-content: center; min-height: 100vh; padding: 24px 12px; }
+    .ticket { background: #fff; max-width: 360px; width: 100%; padding: 24px 20px; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
+    .header { text-align: center; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 2px dashed #ddd; }
+    .header h1 { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: #111; }
+    .header .sub { font-size: 11px; color: #888; margin-top: 3px; line-height: 1.5; }
+    .divider { border: none; border-top: 1px dashed #ddd; margin: 12px 0; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; gap: 8px; }
+    .row .lbl { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+    .row .val { font-size: 12px; text-align: right; }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-confirmed { background: #d1fae5; color: #065f46; }
+    .badge-cancelled { background: #fee2e2; color: #991b1b; }
+    .badge-ready { background: #dbeafe; color: #1e40af; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    thead th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; border-bottom: 1px solid #eee; padding: 4px 2px; }
+    tbody td { padding: 5px 2px; font-size: 12px; vertical-align: top; border-bottom: 1px dotted #eee; }
+    tbody tr:last-child td { border-bottom: none; }
+    .totals { margin-top: 10px; }
+    .totals .row { margin-bottom: 4px; }
+    .totals .row .lbl { color: #555; font-size: 12px; text-transform: none; }
+    .totals .grand { font-size: 16px; font-weight: 900; border-top: 2px solid #111; padding-top: 6px; margin-top: 4px; }
+    .footer { text-align: center; font-size: 11px; color: #aaa; margin-top: 16px; line-height: 1.7; }
+    .footer strong { color: #666; }
+    .print-btn { text-align: center; margin-top: 20px; }
+    .print-btn button {
+      padding: 11px 28px; background: #e11d48; color: white; border: none;
+      border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    .print-btn button:hover { background: #be123c; }
     @media print {
       body { background: white; }
-      .no-print { display: none; }
-      .ticket { max-width: 100%; }
+      .page { padding: 0; }
+      .ticket { box-shadow: none; border-radius: 0; max-width: 100%; }
+      .no-print { display: none !important; }
     }
   </style>
 </head>
 <body>
+<div class="page">
 <div class="ticket">
+
   <div class="header">
     <h1>ENDULZARTE</h1>
-    <p>PostrerÃ­a & Roll Â· ${location}</p>
-    <p>Tel: ${phone}</p>
+    <div class="sub">
+      Poster&iacute;a &amp; Roll &middot; ${location}<br>
+      Tel: ${phone}
+    </div>
   </div>
 
-  <div class="section">
-    <div class="row"><span class="label">Pedido #</span><strong>${order.orderNumber}</strong></div>
-    <div class="row"><span class="label">Fecha</span><span>${createdAt}</span></div>
-    <div class="row"><span class="label">Estado</span><span>${order.status.toUpperCase()}</span></div>
-    <div class="row"><span class="label">Tipo</span><span>${order.orderType === "delivery" ? "A domicilio" : "Para recoger"}</span></div>
-    <div class="row"><span class="label">Pago</span><span>${paymentLabel[order.paymentMethod] || order.paymentMethod}</span></div>
+  <div class="row">
+    <span class="lbl">Pedido #</span>
+    <strong class="val">${order.orderNumber}</strong>
+  </div>
+  <div class="row">
+    <span class="lbl">Fecha</span>
+    <span class="val">${createdAt}</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Estado</span>
+    <span class="badge badge-${order.status}">${
+      order.status === "pending" ? "Pendiente" :
+      order.status === "confirmed" ? "Confirmado" :
+      order.status === "ready" ? "Listo" :
+      order.status === "cancelled" ? "Cancelado" :
+      order.status.toUpperCase()
+    }</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Tipo</span>
+    <span class="val">${order.orderType === "delivery" ? "&#128666; A domicilio" : "&#127978; Para recoger"}</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Pago</span>
+    <span class="val">${paymentLabel[order.paymentMethod] || order.paymentMethod}</span>
   </div>
 
-  <div class="section">
-    <div class="row"><span class="label">Cliente</span><span>${order.customerName}</span></div>
-    <div class="row"><span class="label">TelÃ©fono</span><span>${order.customerPhone}</span></div>
-    ${deliveryAddr ? `<div class="row"><span class="label">DirecciÃ³n</span><span style="max-width:200px;text-align:right">${deliveryAddr}</span></div>` : ""}
-    ${order.cashAmount ? `<div class="row"><span class="label">Paga con</span><span>$${order.cashAmount}</span></div>` : ""}
+  <hr class="divider">
+
+  <div class="row">
+    <span class="lbl">Cliente</span>
+    <span class="val" style="font-weight:bold">${order.customerName}</span>
+  </div>
+  <div class="row">
+    <span class="lbl">Tel&eacute;fono</span>
+    <span class="val">${order.customerPhone}</span>
+  </div>
+  ${deliveryAddr ? `<div class="row"><span class="lbl">Direcci&oacute;n</span><span class="val" style="max-width:200px">${deliveryAddr}</span></div>` : ""}
+  ${order.cashAmount ? `<div class="row"><span class="lbl">Paga con</span><span class="val">$${order.cashAmount}</span></div>` : ""}
+
+  <hr class="divider">
+
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left">Producto</th>
+        <th style="text-align:center">Cant</th>
+        <th style="text-align:right">P/U</th>
+        <th style="text-align:right">Total</th>
+      </tr>
+    </thead>
+    <tbody>${itemsHtml}</tbody>
+  </table>
+
+  <div class="totals">
+    <div class="row">
+      <span class="lbl">Subtotal</span>
+      <span>$${Number(order.subtotal || order.total).toFixed(2)}</span>
+    </div>
+    ${order.deliveryCost && Number(order.deliveryCost) > 0
+      ? `<div class="row"><span class="lbl">Env&iacute;o</span><span>$${Number(order.deliveryCost).toFixed(2)}</span></div>`
+      : `<div class="row"><span class="lbl">Env&iacute;o</span><span>$0.00</span></div>`}
+    <div class="row grand">
+      <span>TOTAL</span>
+      <span>$${Number(order.total).toFixed(2)}</span>
+    </div>
   </div>
 
-  <div class="section">
-    <table>
-      <thead>
-        <tr>
-          <th>Producto</th>
-          <th style="text-align:center">Cant</th>
-          <th style="text-align:right">P/U</th>
-          <th style="text-align:right">Total</th>
-        </tr>
-      </thead>
-      <tbody>${itemsHtml}</tbody>
-    </table>
-  </div>
-
-  <div class="section total-section">
-    <div class="row"><span>Subtotal</span><span>$${Number(order.subtotal || order.total).toFixed(2)}</span></div>
-    ${order.deliveryCost ? `<div class="row"><span>EnvÃ­o</span><span>$${Number(order.deliveryCost).toFixed(2)}</span></div>` : ""}
-    <div class="row" style="font-size:17px"><span>TOTAL</span><span>$${Number(order.total).toFixed(2)}</span></div>
-  </div>
+  ${order.notes ? `<hr class="divider"><div style="font-size:11px;color:#666"><strong>Nota:</strong> ${order.notes}</div>` : ""}
 
   <div class="footer">
-    <p>Â¡Gracias por tu pedido!</p>
-    <p>Endulzarte Â· PostrerÃ­a & Roll</p>
-    ${order.notes ? `<p><em>Nota: ${order.notes}</em></p>` : ""}
+    <strong>&iexcl;Gracias por tu pedido!</strong><br>
+    Endulzarte &middot; Poster&iacute;a &amp; Roll
   </div>
 
-  <div class="no-print" style="text-align:center;margin-top:20px">
-    <button onclick="window.print()" style="padding:10px 24px;background:#e11d48;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">
-      ðŸ–¨ Imprimir Ticket
-    </button>
+  <div class="print-btn no-print">
+    <button onclick="window.print()">&#128424; Imprimir Ticket</button>
   </div>
+
+</div>
 </div>
 </body>
 </html>`;
