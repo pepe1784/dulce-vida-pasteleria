@@ -356,6 +356,15 @@ export function registerAdminRoutes(app: Express) {
 
       const paymentLabel: Record<string, string> = { cash: "Efectivo", transfer: "Transferencia bancaria", card: "Tarjeta" };
 
+      const rfc = settings.rfc || "XAXX010101000";
+      const fiscalAddress = settings.fiscal_address || location;
+      const businessName = settings.business_name || "ENDULZARTE";
+      const totalNum = Number(order.total);
+      const baseImponible = totalNum / 1.16;
+      const ivaAmount = totalNum - baseImponible;
+      const deliveryCostNum = Number(order.deliveryCost || 0);
+      const subtotalBeforeDelivery = Number(order.subtotal || order.total);
+
       const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -363,43 +372,66 @@ export function registerAdminRoutes(app: Express) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ticket ${order.orderNumber}</title>
   <style>
+    @page {
+      size: 80mm auto;
+      margin: 4mm;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Courier New', monospace; font-size: 13px; color: #1a1a1a; background: #f5f5f5; }
-    .page { display: flex; align-items: flex-start; justify-content: center; min-height: 100vh; padding: 24px 12px; }
-    .ticket { background: #fff; max-width: 360px; width: 100%; padding: 24px 20px; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
-    .header { text-align: center; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 2px dashed #ddd; }
-    .header h1 { font-size: 24px; font-weight: 900; letter-spacing: 4px; color: #111; }
-    .header .sub { font-size: 11px; color: #888; margin-top: 3px; line-height: 1.5; }
-    .divider { border: none; border-top: 1px dashed #ddd; margin: 12px 0; }
-    .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; gap: 8px; }
-    .row .lbl { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
-    .row .val { font-size: 12px; text-align: right; }
-    .badge { display: inline-block; padding: 1px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
-    .badge-pending { background: #fef3c7; color: #92400e; }
-    .badge-confirmed { background: #d1fae5; color: #065f46; }
-    .badge-cancelled { background: #fee2e2; color: #991b1b; }
-    .badge-ready { background: #dbeafe; color: #1e40af; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    thead th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; border-bottom: 1px solid #eee; padding: 4px 2px; }
-    tbody td { padding: 5px 2px; font-size: 12px; vertical-align: top; border-bottom: 1px dotted #eee; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      color: #000;
+      background: #f0f0f0;
+      width: 100%;
+    }
+    .page {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 16px 8px;
+      background: #f0f0f0;
+    }
+    .ticket {
+      background: #fff;
+      width: 72mm;
+      max-width: 72mm;
+      padding: 6mm 5mm;
+      border-radius: 2px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.15);
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    h1 { font-size: 16px; font-weight: 900; letter-spacing: 3px; text-align: center; margin-bottom: 2px; }
+    .sub { font-size: 9px; color: #444; text-align: center; line-height: 1.5; margin-bottom: 2px; }
+    .rfc-line { font-size: 9px; text-align: center; font-weight: bold; margin-bottom: 2px; }
+    hr { border: none; border-top: 1px dashed #888; margin: 5px 0; }
+    hr.double { border-top: 2px solid #000; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; gap: 4px; }
+    .row .lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.3px; color: #555; white-space: nowrap; flex-shrink: 0; }
+    .row .val { font-size: 10px; text-align: right; word-break: break-word; }
+    .status-text { font-size: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid #000; padding: 0 4px; display: inline-block; }
+    table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+    thead th { font-size: 9px; text-transform: uppercase; border-bottom: 1px solid #000; padding: 2px 1px; }
+    tbody td { padding: 3px 1px; font-size: 10px; vertical-align: top; border-bottom: 1px dotted #aaa; }
     tbody tr:last-child td { border-bottom: none; }
-    .totals { margin-top: 10px; }
-    .totals .row { margin-bottom: 4px; }
-    .totals .row .lbl { color: #555; font-size: 12px; text-transform: none; }
-    .totals .grand { font-size: 16px; font-weight: 900; border-top: 2px solid #111; padding-top: 6px; margin-top: 4px; }
-    .footer { text-align: center; font-size: 11px; color: #aaa; margin-top: 16px; line-height: 1.7; }
-    .footer strong { color: #666; }
+    .totals { margin-top: 4px; }
+    .totals .row { margin-bottom: 2px; font-size: 10px; }
+    .totals .row .lbl { color: #000; text-transform: none; font-size: 10px; }
+    .grand { border-top: 1px solid #000; padding-top: 4px; margin-top: 3px; font-size: 13px; font-weight: 900; }
+    .footer { text-align: center; font-size: 9px; color: #444; margin-top: 6px; line-height: 1.6; border-top: 1px dashed #888; padding-top: 5px; }
+    .legal { font-size: 8px; color: #666; text-align: center; margin-top: 4px; line-height: 1.4; }
     .print-btn { text-align: center; margin-top: 20px; }
     .print-btn button {
-      padding: 11px 28px; background: #e11d48; color: white; border: none;
-      border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;
-      letter-spacing: 0.5px;
+      padding: 10px 28px; background: #111; color: #fff; border: none;
+      border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;
+      display: inline-flex; align-items: center; gap: 8px;
     }
-    .print-btn button:hover { background: #be123c; }
+    .print-btn button:hover { background: #333; }
     @media print {
       body { background: white; }
-      .page { padding: 0; }
-      .ticket { box-shadow: none; border-radius: 0; max-width: 100%; }
+      .page { padding: 0; background: white; min-height: unset; }
+      .ticket { box-shadow: none; border-radius: 0; width: 100%; max-width: 100%; padding: 0; }
       .no-print { display: none !important; }
     }
   </style>
@@ -408,93 +440,75 @@ export function registerAdminRoutes(app: Express) {
 <div class="page">
 <div class="ticket">
 
-  <div class="header">
-    <h1>ENDULZARTE</h1>
-    <div class="sub">
-      Poster&iacute;a &amp; Roll &middot; ${location}<br>
-      Tel: ${phone}
-    </div>
-  </div>
+  <h1>${businessName}</h1>
+  <div class="sub">Poster&iacute;a &amp; Roll<br>${fiscalAddress}<br>Tel: ${phone}</div>
+  <div class="rfc-line">RFC: ${rfc}</div>
 
-  <div class="row">
-    <span class="lbl">Pedido #</span>
-    <strong class="val">${order.orderNumber}</strong>
-  </div>
-  <div class="row">
-    <span class="lbl">Fecha</span>
-    <span class="val">${createdAt}</span>
-  </div>
+  <hr>
+
+  <div class="row"><span class="lbl">Folio</span><span class="val bold">${order.orderNumber}</span></div>
+  <div class="row"><span class="lbl">Fecha</span><span class="val">${createdAt}</span></div>
   <div class="row">
     <span class="lbl">Estado</span>
-    <span class="badge badge-${order.status}">${
-      order.status === "pending" ? "Pendiente" :
-      order.status === "confirmed" ? "Confirmado" :
-      order.status === "ready" ? "Listo" :
-      order.status === "cancelled" ? "Cancelado" :
-      order.status.toUpperCase()
-    }</span>
+    <span class="val">
+      <span class="status-text">${
+        order.status === "pending" ? "PENDIENTE" :
+        order.status === "confirmed" ? "CONFIRMADO" :
+        order.status === "ready" ? "LISTO" :
+        order.status === "cancelled" ? "CANCELADO" :
+        order.status.toUpperCase()
+      }</span>
+    </span>
   </div>
-  <div class="row">
-    <span class="lbl">Tipo</span>
-    <span class="val">${order.orderType === "delivery" ? "A domicilio" : "Para recoger"}</span>
-  </div>
-  <div class="row">
-    <span class="lbl">Pago</span>
-    <span class="val">${paymentLabel[order.paymentMethod] || order.paymentMethod}</span>
-  </div>
+  <div class="row"><span class="lbl">Tipo</span><span class="val">${order.orderType === "delivery" ? "Entrega a domicilio" : "Pasa a recoger"}</span></div>
+  <div class="row"><span class="lbl">Forma de pago</span><span class="val">${paymentLabel[order.paymentMethod] || order.paymentMethod}</span></div>
 
-  <hr class="divider">
+  <hr>
 
-  <div class="row">
-    <span class="lbl">Cliente</span>
-    <span class="val" style="font-weight:bold">${order.customerName}</span>
-  </div>
-  <div class="row">
-    <span class="lbl">Tel&eacute;fono</span>
-    <span class="val">${order.customerPhone}</span>
-  </div>
-  ${deliveryAddr ? `<div class="row"><span class="lbl">Direcci&oacute;n</span><span class="val" style="max-width:200px">${deliveryAddr}</span></div>` : ""}
-  ${order.cashAmount ? `<div class="row"><span class="lbl">Paga con</span><span class="val">$${order.cashAmount}</span></div>` : ""}
+  <div class="row"><span class="lbl">Cliente</span><span class="val bold">${order.customerName}</span></div>
+  <div class="row"><span class="lbl">Tel&eacute;fono</span><span class="val">${order.customerPhone}</span></div>
+  ${deliveryAddr ? `<div class="row"><span class="lbl">Direcci&oacute;n</span><span class="val">${deliveryAddr}</span></div>` : ""}
+  ${order.cashAmount ? `<div class="row"><span class="lbl">Paga con</span><span class="val">$${Number(order.cashAmount).toFixed(2)}</span></div>` : ""}
 
-  <hr class="divider">
+  <hr>
 
   <table>
     <thead>
       <tr>
-        <th style="text-align:left">Producto</th>
+        <th style="text-align:left">Descripci&oacute;n</th>
         <th style="text-align:center">Cant</th>
         <th style="text-align:right">P/U</th>
-        <th style="text-align:right">Total</th>
+        <th style="text-align:right">Importe</th>
       </tr>
     </thead>
     <tbody>${itemsHtml}</tbody>
   </table>
 
   <div class="totals">
-    <div class="row">
-      <span class="lbl">Subtotal</span>
-      <span>$${Number(order.subtotal || order.total).toFixed(2)}</span>
-    </div>
-    ${order.deliveryCost && Number(order.deliveryCost) > 0
-      ? `<div class="row"><span class="lbl">Env&iacute;o</span><span>$${Number(order.deliveryCost).toFixed(2)}</span></div>`
-      : `<div class="row"><span class="lbl">Env&iacute;o</span><span>$0.00</span></div>`}
-    <div class="row grand">
-      <span>TOTAL</span>
-      <span>$${Number(order.total).toFixed(2)}</span>
-    </div>
+    <div class="row"><span class="lbl">Subtotal</span><span>$${subtotalBeforeDelivery.toFixed(2)}</span></div>
+    ${deliveryCostNum > 0 ? `<div class="row"><span class="lbl">Env&iacute;o</span><span>$${deliveryCostNum.toFixed(2)}</span></div>` : ""}
+    <div class="row"><span class="lbl">Base imponible</span><span>$${baseImponible.toFixed(2)}</span></div>
+    <div class="row"><span class="lbl">IVA 16%</span><span>$${ivaAmount.toFixed(2)}</span></div>
+    <div class="row grand"><span>TOTAL</span><span>$${totalNum.toFixed(2)}</span></div>
   </div>
 
-  ${order.notes ? `<hr class="divider"><div style="font-size:11px;color:#666"><strong>Nota:</strong> ${order.notes}</div>` : ""}
+  ${order.notes ? `<hr><div style="font-size:9px"><strong>Notas:</strong> ${order.notes}</div>` : ""}
 
   <div class="footer">
-    <strong>&iexcl;Gracias por tu pedido!</strong><br>
-    Endulzarte &middot; Poster&iacute;a &amp; Roll
+    <strong>GRACIAS POR SU COMPRA</strong><br>
+    Este comprobante no es un CFDI fiscal.<br>
+    Para factura solicitar dentro de las<br>
+    24 hrs de realizada la compra.
+  </div>
+
+  <div class="legal">
+    Precios incluyen IVA 16% &middot; P&uacute;blico en general
   </div>
 
   <div class="print-btn no-print">
     <button id="printBtn">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-      Imprimir Ticket
+      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimir
     </button>
   </div>
 

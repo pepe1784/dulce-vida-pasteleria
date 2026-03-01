@@ -469,8 +469,9 @@ function ProductsTab({ user }: { user: AdminUser }) {
               <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1495147466023-ac5c588e2e94?auto=format&fit=crop&q=80&w=400"; }} />
               {/* Warning badge for ephemeral local uploads */}
               {p.imageUrl.startsWith("/uploads/") && (
-                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-400 text-white shadow-sm" title="Imagen local — se perderá al reiniciar Render. Re-sube la imagen.">
-                  \u26a0 Local
+                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-400 text-white shadow-sm flex items-center gap-0.5" title="Imagen local — se perderá al reiniciar Render. Re-sube la imagen.">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  Local
                 </div>
               )}
               <div className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-2.5">
@@ -739,6 +740,22 @@ function SettingsTab({ user }: { user: AdminUser }) {
           <div><label className={labelClass}>Email de contacto</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input value={settings.contact_email || ""} onChange={(e) => updateSetting("contact_email", e.target.value)} className="pl-10 bg-slate-50/50 border-slate-200" /></div></div>
           <div><label className={labelClass}>Ubicacion (texto)</label><Input value={settings.location_text || ""} onChange={(e) => updateSetting("location_text", e.target.value)} className="bg-slate-50/50 border-slate-200" /></div>
           <div><label className={labelClass}>Google Maps URL</label><div className="relative"><Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input value={settings.google_maps || ""} onChange={(e) => updateSetting("google_maps", e.target.value)} className="pl-10 bg-slate-50/50 border-slate-200" /></div></div>
+        </SectionCard>
+
+        <SectionCard icon={FileText} title="Datos Fiscales (Ticket)" description="Informacion que aparece en los tickets de venta">
+          <div>
+            <label className={labelClass}>RFC del negocio</label>
+            <Input value={settings.rfc || ""} onChange={(e) => updateSetting("rfc", e.target.value)} placeholder="XAXX010101000" className="bg-slate-50/50 border-slate-200 font-mono" />
+            <p className="text-[10px] text-slate-400 mt-1">Si no tienes RFC, deja el valor XAXX010101000 (publico en general).</p>
+          </div>
+          <div>
+            <label className={labelClass}>Razon social / Nombre del negocio</label>
+            <Input value={settings.business_name || ""} onChange={(e) => updateSetting("business_name", e.target.value)} placeholder="ENDULZARTE" className="bg-slate-50/50 border-slate-200" />
+          </div>
+          <div>
+            <label className={labelClass}>Domicilio fiscal (tal como aparece en el ticket)</label>
+            <Input value={settings.fiscal_address || ""} onChange={(e) => updateSetting("fiscal_address", e.target.value)} placeholder="Col. Centro, Colima, Col., C.P. 28000" className="bg-slate-50/50 border-slate-200" />
+          </div>
         </SectionCard>
       )}
 
