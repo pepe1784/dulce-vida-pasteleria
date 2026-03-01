@@ -140,10 +140,15 @@ if (isMySQL) {
         );
         CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
       `);
-      // Safely add customer_google_id to orders if it already existed without it
+      // Safely add columns that may not exist in older deployments
       await client.query(`
         DO $$ BEGIN
           ALTER TABLE orders ADD COLUMN customer_google_id TEXT;
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+      `);
+      await client.query(`
+        DO $$ BEGIN
+          ALTER TABLE orders ADD COLUMN order_number VARCHAR(30) NOT NULL DEFAULT '';
         EXCEPTION WHEN duplicate_column THEN NULL; END $$;
       `);
       console.log("✅ Tablas PostgreSQL inicializadas correctamente");

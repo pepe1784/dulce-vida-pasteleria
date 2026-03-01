@@ -84,10 +84,12 @@ export function setupGoogleAuth(app: Express) {
 
   // ── Configure Passport Google Strategy ──────────────────────────────────
   // Priority: BASE_URL env → RENDER_EXTERNAL_URL (set automatically by Render) → localhost
-  const baseUrl =
+  // Trim trailing slash to avoid double-slash in callbackURL (RENDER_EXTERNAL_URL may have one)
+  const rawBase =
     process.env.BASE_URL ||
     process.env.RENDER_EXTERNAL_URL ||
     (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+  const baseUrl = rawBase.replace(/\/+$/, "");
 
   const callbackURL = `${baseUrl}/api/auth/google/callback`;
   console.log(`🔑 Google OAuth callbackURL: ${callbackURL}`);
