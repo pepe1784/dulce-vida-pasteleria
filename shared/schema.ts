@@ -1,67 +1,69 @@
-// NOTE: Production = MySQL (Hostinger). Local dev = SQLite via init-sqlite.ts.
-// For production migrations use: npm run db:push (with MySQL DATABASE_URL).
-import { mysqlTable, text, int, decimal, varchar, timestamp } from "drizzle-orm/mysql-core";
+// Production = PostgreSQL (Render). Local dev = SQLite via init-sqlite.ts.
+// Schema uses pg-core so the bundle doesn't break when running on PostgreSQL.
+import { pgTable, text, integer, varchar, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // ── Products ─────────────────────────────────────────────────────────
-export const products = mysqlTable("products", {
-  id: int("id").autoincrement().primaryKey(),
+export const products = pgTable("products", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
   price: varchar("price", { length: 20 }).notNull(),
-  stock: int("stock").notNull().default(50),
+  stock: integer("stock").notNull().default(50),
   category: text("category").notNull(),
   imageUrl: text("image_url").notNull(),
 });
 
 // ── Orders ────────────────────────────────────────────────────────────
-export const orders = mysqlTable("orders", {
-  id: int("id").autoincrement().primaryKey(),
-  orderNumber: varchar("order_number", { length: 30 }).notNull(),
-  customerName: text("customer_name").notNull(),
-  customerPhone: varchar("customer_phone", { length: 25 }).notNull(),
+export const orders = pgTable("orders", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  orderNumber: varchar("order_number", { length: 30 }).notNull().default(""),
+  customerName: text("customer_name").notNull().default(""),
+  customerPhone: varchar("customer_phone", { length: 25 }).notNull().default(""),
   orderType: varchar("order_type", { length: 15 }).notNull().default("pickup"),
   paymentMethod: varchar("payment_method", { length: 20 }).notNull().default("cash"),
   cashAmount: varchar("cash_amount", { length: 20 }),
   deliveryAddress: text("delivery_address"),
-  subtotal: varchar("subtotal", { length: 20 }).notNull(),
+  subtotal: varchar("subtotal", { length: 20 }).notNull().default("0"),
   deliveryCost: varchar("delivery_cost", { length: 20 }),
   total: varchar("total", { length: 20 }).notNull(),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
+  customerGoogleId: text("customer_google_id"),
 });
 
 // ── Order Items ───────────────────────────────────────────────────────
-export const orderItems = mysqlTable("order_items", {
-  id: int("id").autoincrement().primaryKey(),
-  orderId: int("order_id").notNull(),
-  productId: int("product_id").notNull(),
-  productName: text("product_name").notNull(),
-  quantity: int("quantity").notNull(),
+export const orderItems = pgTable("order_items", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  orderId: integer("order_id").notNull(),
+  productId: integer("product_id").notNull(),
+  productName: text("product_name").notNull().default(""),
+  quantity: integer("quantity").notNull(),
   price: varchar("price", { length: 20 }).notNull(),
 });
 
 // ── Admin Users ───────────────────────────────────────────────────────
-export const adminUsers = mysqlTable("admin_users", {
-  id: int("id").autoincrement().primaryKey(),
+export const adminUsers = pgTable("admin_users", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   email: text("email").notNull(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
   role: varchar("role", { length: 20 }).notNull().default("employee"),
-  createdAt: int("created_at"),
+  createdAt: integer("created_at"),
 });
 
 // ── Site Settings ─────────────────────────────────────────────────────
-export const siteSettings = mysqlTable("site_settings", {
+export const siteSettings = pgTable("site_settings", {
   key: varchar("key", { length: 100 }).primaryKey(),
   value: text("value").notNull(),
-  updatedAt: int("updated_at"),
+  updatedAt: integer("updated_at"),
 });
 
 // ── Zod Schemas ───────────────────────────────────────────────────────
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true });
 
 // ── TypeScript Types ──────────────────────────────────────────────────
 export type Product = typeof products.$inferSelect;

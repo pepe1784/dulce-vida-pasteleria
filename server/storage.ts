@@ -15,24 +15,30 @@ function sqliteDb(): any {
 
 // Run on MySQL/PostgreSQL drizzle instance using raw sql
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Convert MySQL/SQLite ? placeholders to PostgreSQL $1,$2,... style
+function toPgSql(sql: string): string {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
 async function rawQuery(sql: string, params: any[] = []): Promise<any[]> {
   if (isSQLite()) {
     const stmt = sqliteDb().prepare(sql);
     const result = stmt.all(...params);
     return result as any[];
   } else {
-    // drizzle mysql2 / pg — use the underlying pool via db.$client
     const client = dbRef.db.$client;
     if (client && typeof client.execute === "function") {
       // mysql2 pool
       const [rows] = await client.execute(sql, params);
       return rows as any[];
     } else if (client && typeof client.query === "function") {
-      // pg pool
-      const res = await client.query(sql, params.length ? params : undefined);
+      // pg pool — must use $1,$2,... placeholders
+      const pgSql = toPgSql(sql);
+      const res = await client.query(pgSql, params.length ? params : undefined);
       return res.rows;
     }
-    // fallback: drizzle execute
+    // fallback
     const result = await dbRef.db.execute({ sql, params });
     const rows = Array.isArray(result) ? result : (result as any).rows ?? result;
     return rows as any[];
@@ -47,11 +53,17 @@ async function rawRun(sql: string, params: any[] = []): Promise<{ lastInsertId?:
   } else {
     const client = dbRef.db.$client;
     if (client && typeof client.execute === "function") {
+      // mysql2 pool
       const [result] = await client.execute(sql, params);
       return { lastInsertId: (result as any).insertId, changes: (result as any).affectedRows };
     } else if (client && typeof client.query === "function") {
-      const res = await client.query(sql, params.length ? params : undefined);
-      return { lastInsertId: res.oid, changes: res.rowCount ?? 0 };
+      // pg pool — use $1,$2,... and RETURNING id for INSERTs
+      let pgSql = toPgSql(sql);
+      const isInsert = /^\s*INSERT/i.test(pgSql);
+      if (isInsert && !/RETURNING/i.test(pgSql)) pgSql += " RETURNING id";
+      const res = await client.query(pgSql, params.length ? params : undefined);
+      const lastInsertId = isInsert ? (res.rows[0]?.id ?? undefined) : undefined;
+      return { lastInsertId, changes: res.rowCount ?? 0 };
     }
     const result = await dbRef.db.execute({ sql, params });
     return { lastInsertId: (result as any)?.insertId };

@@ -1,11 +1,12 @@
-import * as schema from "@shared/schema";
+// NOTE: schema is only needed for MySQL/Drizzle path. Import lazily to avoid
+// loading drizzle-orm/mysql-core in PostgreSQL/SQLite environments.
 
 const dbUrl = process.env.DATABASE_URL || "";
 const isMySQL = dbUrl.startsWith("mysql://") || dbUrl.startsWith("mysql2://");
 const isPostgres = dbUrl.startsWith("postgresql://") || dbUrl.startsWith("postgres://");
 
 console.log(`🔍 DATABASE_URL prefix: ${dbUrl ? dbUrl.substring(0, 20) + "..." : "(none)"}`);
-console.log(`🔍 Mode: ${isMySQL ? "MySQL" : isPostgres ? "PostgreSQL→MySQL migrate" : "SQLite (dev)"}`);
+console.log(`🔍 isPostgres: ${isPostgres}`);
 
 // dbRef is a shared container — avoids ESM live-binding issues with tsx
 export const dbRef: { db: any } = { db: undefined };
@@ -16,6 +17,7 @@ if (isMySQL) {
   // ── Production: MySQL (Hostinger / PlanetScale / Railway) ──
   dbType = "mysql";
   dbReady = (async () => {
+    const schema = await import("@shared/schema");
     const mysql = await import("mysql2/promise");
     const { drizzle } = await import("drizzle-orm/mysql2");
 
@@ -25,7 +27,7 @@ if (isMySQL) {
       connectionLimit: 10,
     });
 
-    dbRef.db = drizzle(connection, { schema, mode: "default" });
+    dbRef.db = drizzle(connection, { schema: schema as any, mode: "default" });
 
     // Create tables if they don't exist
     await connection.execute(`
@@ -88,13 +90,13 @@ if (isMySQL) {
     console.log("✅ Conectado a MySQL");
   })();
 } else if (isPostgres) {
-  // ── Legacy PostgreSQL (kept for migration period) ──
-  dbType = "sqlite"; // runs pg but storage uses the same interface
+  // ── Production PostgreSQL (Render) ──
+  dbType = "sqlite"; // storage.ts uses raw SQL — same interface
   dbReady = (async () => {
     const pg = await import("pg");
-    const { drizzle } = await import("drizzle-orm/node-postgres");
     const pool = new pg.default.Pool({ connectionString: dbUrl });
-    dbRef.db = drizzle(pool, { schema });
+    // Expose the pool directly — storage.ts uses dbRef.db.$client.query()
+    dbRef.db = { $client: pool };
 
     // Create tables for PostgreSQL (legacy)
     const client = await pool.connect();
@@ -111,7 +113,7 @@ if (isMySQL) {
           order_type VARCHAR(15) NOT NULL DEFAULT 'pickup', payment_method VARCHAR(20) NOT NULL DEFAULT 'cash',
           cash_amount VARCHAR(20), delivery_address TEXT, subtotal VARCHAR(20) NOT NULL DEFAULT '0',
           delivery_cost VARCHAR(20), total VARCHAR(20) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending',
-          notes TEXT, created_at TIMESTAMP DEFAULT NOW()
+          notes TEXT, created_at TIMESTAMP DEFAULT NOW(), customer_google_id TEXT
         );
         CREATE TABLE IF NOT EXISTS order_items (
           id SERIAL PRIMARY KEY, order_id INT NOT NULL, product_id INT NOT NULL,
@@ -124,8 +126,21 @@ if (isMySQL) {
         CREATE TABLE IF NOT EXISTS site_settings (
           key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INT
         );
+        CREATE TABLE IF NOT EXISTS customer_profiles (
+          id SERIAL PRIMARY KEY, google_id TEXT UNIQUE NOT NULL,
+          email TEXT NOT NULL, name TEXT NOT NULL, picture TEXT,
+          phone TEXT, preferred_address TEXT,
+          created_at INT, updated_at INT
+        );
       `);
-      console.log("✅ Conectado a PostgreSQL (modo legado)");
+      // Safely add customer_google_id to orders if it already existed without it
+      await client.query(`
+        DO $$ BEGIN
+          ALTER TABLE orders ADD COLUMN customer_google_id TEXT;
+        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+      `);
+      console.log("✅ Tablas PostgreSQL inicializadas correctamente");
+      console.log("✅ Conectado a PostgreSQL");
     } finally {
       client.release();
     }
