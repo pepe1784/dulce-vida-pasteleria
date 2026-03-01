@@ -11,6 +11,8 @@ import { createServer } from "http";
 import { dbReady, dbRef } from "./db";
 
 const app = express();
+// Trust Render/proxy X-Forwarded-For header (needed for rate-limiter + cookies)
+app.set("trust proxy", 1);
 const httpServer = createServer(app);
 
 declare module "http" {
@@ -162,7 +164,7 @@ app.use((req, res, next) => {
     const { default: connectPgSimple } = await import("connect-pg-simple");
     const PgStore = connectPgSimple(session);
     app.use(session({
-      store: new (PgStore as any)({ pool: pgPool, createTableIfMissing: true }) as any,
+      store: new (PgStore as any)({ pool: pgPool }) as any,
       secret: sessionSecret,
       resave: false,
       saveUninitialized: false,

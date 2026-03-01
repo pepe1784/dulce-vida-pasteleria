@@ -132,6 +132,13 @@ if (isMySQL) {
           phone TEXT, preferred_address TEXT,
           created_at INT, updated_at INT
         );
+        CREATE TABLE IF NOT EXISTS "session" (
+          "sid" varchar NOT NULL COLLATE "default",
+          "sess" json NOT NULL,
+          "expire" timestamp(6) NOT NULL,
+          CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE
+        );
+        CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
       `);
       // Safely add customer_google_id to orders if it already existed without it
       await client.query(`
