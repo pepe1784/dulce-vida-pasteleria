@@ -83,9 +83,14 @@ export function setupGoogleAuth(app: Express) {
   }
 
   // ── Configure Passport Google Strategy ──────────────────────────────────
-  const callbackURL = process.env.NODE_ENV === "production"
-    ? `${process.env.BASE_URL || ""}/api/auth/google/callback`
-    : "http://localhost:5000/api/auth/google/callback";
+  // Priority: BASE_URL env → RENDER_EXTERNAL_URL (set automatically by Render) → localhost
+  const baseUrl =
+    process.env.BASE_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    (process.env.NODE_ENV === "production" ? "" : "http://localhost:5000");
+
+  const callbackURL = `${baseUrl}/api/auth/google/callback`;
+  console.log(`🔑 Google OAuth callbackURL: ${callbackURL}`);
 
   passport.use(
     new GoogleStrategy(
