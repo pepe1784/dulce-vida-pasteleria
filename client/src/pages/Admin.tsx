@@ -410,8 +410,8 @@ function ProductsTab({ user }: { user: AdminUser }) {
     saveMutation.mutate({ id: isNew ? undefined : editProduct?.id, body: form });
   }
 
-  const canEditText = user.role === "admin" || user.role === "editor";
-  const canDelete = user.role === "admin";
+  const canEditText = user.role === "admin" || user.role === "editor" || user.role === "owner";
+  const canDelete = user.role === "admin" || user.role === "owner";
   const allProductCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...products.map((p) => p.category)]));
 
   const filteredProducts = products.filter((p) => {
@@ -548,7 +548,7 @@ function ProductsTab({ user }: { user: AdminUser }) {
                 </div>
               </>
             )}
-            {user.role === "admin" && (
+            {(user.role === "admin" || user.role === "owner") && (
               <div>
                 <label className={labelClass}>Stock</label>
                 <div className="relative">
@@ -933,11 +933,11 @@ function UsersTab() {
 
 // DASHBOARD TAB
 function DashboardTab() {
-  const { data: stats, isLoading, isError } = useQuery<DashboardStats>({
+  const { data: stats, isLoading, isError, refetch } = useQuery<DashboardStats>({
     queryKey: ["/api/admin/dashboard"],
     queryFn: () => apiFetch("/api/admin/dashboard"),
     refetchInterval: 60_000,
-    retry: 1,
+    retry: 2,
   });
 
   if (isLoading) {
@@ -957,6 +957,9 @@ function DashboardTab() {
         </div>
         <p className="text-slate-500 font-medium">Error cargando el dashboard</p>
         <p className="text-slate-400 text-sm">Verifica que haya pedidos registrados y que la conexión sea estable.</p>
+        <Button size="sm" variant="outline" onClick={() => refetch()} className="mt-2 border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600">
+          <Loader2 className="w-4 h-4 mr-2" /> Reintentar
+        </Button>
       </div>
     );
   }

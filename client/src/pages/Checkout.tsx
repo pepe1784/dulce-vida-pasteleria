@@ -119,54 +119,14 @@ export default function Checkout() {
         }),
       });
 
-      let orderNumber = "EP-000000-000";
-      if (resp.ok) {
-        const data = await resp.json();
-        orderNumber = data.orderNumber || orderNumber;
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ message: "Error al registrar el pedido" }));
+        throw new Error(err.message || "Error al registrar el pedido");
       }
 
-      // Build WhatsApp message
-      const paymentLabels: Record<string, string> = {
-        cash: `Efectivo (paga con $${cashAmount})`,
-        transfer: "Transferencia BBVA",
-        card: "Tarjeta (en sucursal)",
-      };
-      const itemsText = items
-        .map((i) => `  • ${i.quantity}x ${i.name}  $${(Number(i.price) * i.quantity).toFixed(2)}`)
-        .join("\n");
-      const addrLines = orderType === "delivery"
-        ? [
-            `  🏠 Colonia: ${address.colonia}`,
-            `  🚦 Calle: ${address.calle} ${address.numero}`.trim(),
-            address.entre ? `  🔀 Entre: ${address.entre}` : null,
-            address.referencias ? `  📌 Ref: ${address.referencias}` : null,
-          ].filter(Boolean).join("\n")
-        : null;
+      const data = await resp.json();
 
-      const lines = [
-        `🍰 *PEDIDO ${orderNumber}*`,
-        `────────────────────`,
-        `👤 *Cliente:* ${name}`,
-        `📱 *Tel:* +52${phone.replace(/\D/g, "")}`,
-        `🔖 *Tipo:* ${orderType === "delivery" ? "🚚 A domicilio" : "🏪 Para recoger"}`,
-        addrLines ? `📍 *Dirección:*\n${addrLines}` : null,
-        `💳 *Pago:* ${paymentLabels[paymentMethod]}`,
-        `────────────────────`,
-        `🛒 *Productos:*`,
-        itemsText,
-        `────────────────────`,
-        `📦 Subtotal: $${subtotal.toFixed(2)}`,
-        orderType === "delivery" ? `🚚 Envío: Por cotizar` : null,
-        `💰 *TOTAL: $${subtotal.toFixed(2)}${orderType === "delivery" ? " + envío" : ""}*`,
-        `────────────────────`,
-        `_endulzarte.com_`,
-      ];
-      const msg = lines.filter(Boolean).join("\n");
-
-      const waUrl = `https://wa.me/5213123011075?text=${encodeURIComponent(msg)}`;
-      clearCart();
-
-      // If logged in via Google, save phone + delivery address for next time
+      // Save Google profile for next time
       if (customer) {
         updateProfile({
           phone: phone.replace(/\D/g, ""),
@@ -174,13 +134,73 @@ export default function Checkout() {
         });
       }
 
-      window.open(waUrl, "_blank");
-      setLocation("/");
-      toast({ title: "¡Pedido enviado!", description: "Tu pedido fue procesado. Complétalo en WhatsApp." });
+      // Show confirmation step — WhatsApp will open on direct user click (avoids popup blocker)
+      setConfirming({ id: data.id, orderNumber: data.orderNumber || "EP-000000-000" });
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Ocurrió un error. Inténtalo de nuevo.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Called when user clicks "Confirmar y enviar por WhatsApp" — DIRECT click → popup allowed
+  const handleConfirmOrder = () => {
+    if (!confirming) return;
+    const paymentLabels: Record<string, string> = {
+      cash: `Efectivo (paga con $${cashAmount})`,
+      transfer: "Transferencia BBVA",
+      card: "Tarjeta (en sucursal)",
+    };
+    const itemsText = items
+      .map((i) => `  • ${i.quantity}x ${i.name}  $${(Number(i.price) * i.quantity).toFixed(2)}`)
+      .join("\n");
+    const addrLines = orderType === "delivery"
+      ? [
+          `  🏠 Colonia: ${address.colonia}`,
+          `  🚦 Calle: ${address.calle} ${address.numero}`.trim(),
+          address.entre ? `  🔀 Entre: ${address.entre}` : null,
+          address.referencias ? `  📌 Ref: ${address.referencias}` : null,
+        ].filter(Boolean).join("\n")
+      : null;
+    const lines = [
+      `🍰 *PEDIDO ${confirming.orderNumber}*`,
+      `────────────────────`,
+      `👤 *Cliente:* ${name}`,
+      `📱 *Tel:* +52${phone.replace(/\D/g, "")}`,
+      `🔖 *Tipo:* ${orderType === "delivery" ? "🚚 A domicilio" : "🏪 Para recoger"}`,
+      addrLines ? `📍 *Dirección:*\n${addrLines}` : null,
+      `💳 *Pago:* ${paymentLabels[paymentMethod]}`,
+      `────────────────────`,
+      `🛒 *Productos:*`,
+      itemsText,
+      `────────────────────`,
+      `📦 Subtotal: $${subtotal.toFixed(2)}`,
+      orderType === "delivery" ? `🚚 Envío: Por cotizar` : null,
+      `💰 *TOTAL: $${subtotal.toFixed(2)}${orderType === "delivery" ? " + envío" : ""}*`,
+      `────────────────────`,
+      `_endulzarte.com_`,
+    ];
+    const msg = lines.filter(Boolean).join("\n");
+    const waUrl = `https://wa.me/5213123011075?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+    clearCart();
+    setConfirming(null);
+    setLocation("/");
+    toast({ title: "¡Pedido enviado!", description: "Completa el pedido confirmando en WhatsApp." });
+  };
+
+  // Called when user cancels — restores stock
+  const handleCancelOrder = async () => {
+    if (!confirming) return;
+    setIsCancelling(true);
+    try {
+      await fetch(`/api/orders/${confirming.id}/cancel`, { method: "DELETE" });
+      setConfirming(null);
+      toast({ title: "Pedido cancelado", description: "Los productos regresaron al inventario." });
+    } catch {
+      toast({ title: "Error", description: "No se pudo cancelar el pedido.", variant: "destructive" });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
