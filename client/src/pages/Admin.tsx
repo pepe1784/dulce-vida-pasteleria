@@ -735,6 +735,7 @@ function SettingsTab({ user }: { user: AdminUser }) {
       )}
 
       {isAdmin && (
+        <>
         <SectionCard icon={MapPin} title="Contacto" description="Informacion de contacto y ubicacion">
           <div><label className={labelClass}>Telefono</label><div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input value={settings.phone || ""} onChange={(e) => updateSetting("phone", e.target.value)} className="pl-10 bg-slate-50/50 border-slate-200" /></div></div>
           <div><label className={labelClass}>Email de contacto</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><Input value={settings.contact_email || ""} onChange={(e) => updateSetting("contact_email", e.target.value)} className="pl-10 bg-slate-50/50 border-slate-200" /></div></div>
@@ -757,6 +758,7 @@ function SettingsTab({ user }: { user: AdminUser }) {
             <Input value={settings.fiscal_address || ""} onChange={(e) => updateSetting("fiscal_address", e.target.value)} placeholder="Col. Centro, Colima, Col., C.P. 28000" className="bg-slate-50/50 border-slate-200" />
           </div>
         </SectionCard>
+        </>
       )}
 
       <SectionCard icon={Clock} title="Horarios" description="Horario de atencion de la tienda">
