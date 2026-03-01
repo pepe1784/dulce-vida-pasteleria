@@ -141,15 +141,31 @@ if (isMySQL) {
         CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
       `);
       // Safely add columns that may not exist in older deployments
+      // Run all in a single DO block for efficiency
       await client.query(`
         DO $$ BEGIN
-          ALTER TABLE orders ADD COLUMN customer_google_id TEXT;
-        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
-      `);
-      await client.query(`
-        DO $$ BEGIN
-          ALTER TABLE orders ADD COLUMN order_number VARCHAR(30) NOT NULL DEFAULT '';
-        EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+          -- orders: columns added over time
+          BEGIN ALTER TABLE orders ADD COLUMN order_number VARCHAR(30) NOT NULL DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN customer_name TEXT NOT NULL DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN customer_phone VARCHAR(25) NOT NULL DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN order_type VARCHAR(15) NOT NULL DEFAULT 'pickup'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN payment_method VARCHAR(20) NOT NULL DEFAULT 'cash'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN cash_amount VARCHAR(20); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN delivery_address TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN subtotal VARCHAR(20) NOT NULL DEFAULT '0'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN delivery_cost VARCHAR(20); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN total VARCHAR(20) NOT NULL DEFAULT '0'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'pending'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN customer_google_id TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ADD COLUMN created_at TIMESTAMP DEFAULT NOW(); EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- order_items: columns added over time
+          BEGIN ALTER TABLE order_items ADD COLUMN order_id INT NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE order_items ADD COLUMN product_id INT NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE order_items ADD COLUMN product_name TEXT NOT NULL DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE order_items ADD COLUMN quantity INT NOT NULL DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE order_items ADD COLUMN price VARCHAR(20) NOT NULL DEFAULT '0'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        END $$;
       `);
       console.log("✅ Tablas PostgreSQL inicializadas correctamente");
       console.log("✅ Conectado a PostgreSQL");
