@@ -428,10 +428,17 @@ export function registerAdminRoutes(app: Express) {
       display: inline-flex; align-items: center; gap: 8px;
     }
     .print-btn button:hover { background: #333; }
+    .setup-tip {
+      margin-top: 14px; padding: 10px 14px; background: #fffbeb;
+      border: 1px dashed #d97706; border-radius: 6px;
+      font-size: 11px; color: #78350f; line-height: 1.6; font-family: sans-serif;
+    }
+    .setup-tip strong { color: #92400e; }
+    .setup-tip .tip-title { font-weight: bold; margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
     @media print {
-      body { background: white; }
-      .page { padding: 0; background: white; min-height: unset; }
-      .ticket { box-shadow: none; border-radius: 0; width: 100%; max-width: 100%; padding: 0; }
+      html, body { background: white; margin: 0; padding: 0; }
+      .page { display: block; padding: 0; background: white; min-height: unset; }
+      .ticket { box-shadow: none; border-radius: 0; width: 100%; max-width: 100%; padding: 3mm 2mm; }
       .no-print { display: none !important; }
     }
   </style>
@@ -510,6 +517,20 @@ export function registerAdminRoutes(app: Express) {
       <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       Imprimir
     </button>
+  </div>
+
+  <div class="setup-tip no-print">
+    <div class="tip-title">
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Configuraci&oacute;n (solo la primera vez)
+    </div>
+    En el di&aacute;logo de impresi&oacute;n:<br>
+    1. Elige tu impresora t&eacute;rmica de 80mm.<br>
+    2. En <strong>M&aacute;s opciones</strong> selecciona <strong>Sin m&aacute;rgenes</strong>.<br>
+    3. Tama&ntilde;o de papel: el que ya tiene tu impresora (80&times;200mm aprox).<br>
+    <br>
+    Si solo vas a guardar un PDF: en <strong>Destino</strong> elige <em>Guardar como PDF</em>,<br>
+    despu&eacute;s en <strong>M&aacute;s opciones &rarr; Tama&ntilde;o de papel</strong> escoge <strong>80&times;210mm</strong> o similar.
   </div>
 
 </div>
