@@ -23,6 +23,50 @@ function toPgSql(sql: string): string {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
+// ── PostgreSQL alias normalization ─────────────────────────────────────────
+// PostgreSQL lowercases all unquoted identifiers/aliases (e.g. "imageUrl" → "imageurl").
+// This map restores the expected camelCase keys used throughout the app.
+const PG_ALIAS_MAP: Record<string, string> = {
+  imageurl: "imageUrl",
+  passwordhash: "passwordHash",
+  ordernumber: "orderNumber",
+  customername: "customerName",
+  customerphone: "customerPhone",
+  ordertype: "orderType",
+  paymentmethod: "paymentMethod",
+  cashamount: "cashAmount",
+  deliveryaddress: "deliveryAddress",
+  deliverycost: "deliveryCost",
+  createdat: "createdAt",
+  updatedat: "updatedAt",
+  orderid: "orderId",
+  productid: "productId",
+  productname: "productName",
+  googleid: "googleId",
+  preferredaddress: "preferredAddress",
+  customergoogleid: "customerGoogleId",
+  totalsold: "totalSold",
+};
+
+function normalizePgRow(row: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[PG_ALIAS_MAP[k] ?? k] = v;
+  }
+  return out;
+}
+
+function isPostgres(): boolean {
+  // pg.Pool has .query but NOT .execute (mysql2 has .execute)
+  const client = dbRef.db?.$client;
+  return (
+    !isSQLite() &&
+    !!client &&
+    typeof client.query === "function" &&
+    typeof client.execute !== "function"
+  );
+}
+
 async function rawQuery(sql: string, params: any[] = []): Promise<any[]> {
   if (isSQLite()) {
     const stmt = sqliteDb().prepare(sql);
@@ -35,10 +79,10 @@ async function rawQuery(sql: string, params: any[] = []): Promise<any[]> {
       const [rows] = await client.execute(sql, params);
       return rows as any[];
     } else if (client && typeof client.query === "function") {
-      // pg pool — must use $1,$2,... placeholders
+      // pg pool — must use $1,$2,... placeholders; normalize camelCase aliases
       const pgSql = toPgSql(sql);
       const res = await client.query(pgSql, params.length ? params : undefined);
-      return res.rows;
+      return res.rows.map(normalizePgRow);
     }
     // fallback
     const result = await dbRef.db.execute({ sql, params });
@@ -259,8 +303,25 @@ export class DatabaseStorage {
         WHERE o.status != 'cancelled' GROUP BY p.category ORDER BY revenue DESC`);
       recentRows = await rawQuery(`SELECT id, order_number AS orderNumber, customer_name AS customerName,
         total, status, created_at AS createdAt FROM orders ORDER BY id DESC LIMIT 10`);
+    } else if (isPostgres()) {
+      // PostgreSQL — uses CURRENT_DATE and INTERVAL syntax
+      totalRevenueRows = await rawQuery("SELECT COALESCE(SUM(CAST(total AS NUMERIC)), 0) as val FROM orders WHERE status != 'cancelled'");
+      todayRevenueRows = await rawQuery("SELECT COALESCE(SUM(CAST(total AS NUMERIC)), 0) as val FROM orders WHERE DATE(created_at) = CURRENT_DATE AND status != 'cancelled'");
+      totalOrdersRows = await rawQuery("SELECT COUNT(*) as cnt FROM orders WHERE status != 'cancelled'");
+      todayOrdersRows = await rawQuery("SELECT COUNT(*) as cnt FROM orders WHERE DATE(created_at) = CURRENT_DATE");
+      pendingRows = await rawQuery("SELECT COUNT(*) as cnt FROM orders WHERE status = 'pending'");
+      weekOrdersRows = await rawQuery("SELECT COUNT(*) as cnt FROM orders WHERE created_at >= NOW() - INTERVAL '7 days'");
+      topProductsRows = await rawQuery(`SELECT oi.product_name as name, SUM(oi.quantity) as totalSold,
+        SUM(CAST(oi.price AS NUMERIC) * oi.quantity) as revenue
+        FROM order_items oi JOIN orders o ON oi.order_id = o.id
+        WHERE o.status != 'cancelled' GROUP BY oi.product_name ORDER BY totalSold DESC LIMIT 5`);
+      revByCatRows = await rawQuery(`SELECT p.category, SUM(CAST(oi.price AS NUMERIC) * oi.quantity) as revenue
+        FROM order_items oi JOIN products p ON oi.product_id = p.id JOIN orders o ON oi.order_id = o.id
+        WHERE o.status != 'cancelled' GROUP BY p.category ORDER BY revenue DESC`);
+      recentRows = await rawQuery(`SELECT id, order_number AS orderNumber, customer_name AS customerName,
+        total, status, created_at AS createdAt FROM orders ORDER BY id DESC LIMIT 10`);
     } else {
-      // MySQL / PostgreSQL - DATE() function
+      // MySQL — uses CURDATE() and DATE_SUB/INTERVAL syntax
       totalRevenueRows = await rawQuery("SELECT COALESCE(SUM(CAST(total AS DECIMAL(10,2))), 0) as val FROM orders WHERE status != 'cancelled'");
       todayRevenueRows = await rawQuery("SELECT COALESCE(SUM(CAST(total AS DECIMAL(10,2))), 0) as val FROM orders WHERE DATE(created_at) = CURDATE() AND status != 'cancelled'");
       totalOrdersRows = await rawQuery("SELECT COUNT(*) as cnt FROM orders WHERE status != 'cancelled'");

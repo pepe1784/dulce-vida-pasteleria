@@ -76,9 +76,10 @@ export function ProductCard({ product }: ProductCardProps) {
             href={`https://wa.me/${waNumber}?text=Hola%20Endulzarte%2C%20me%20interesa%20${encodeURIComponent(product.name)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:inline-flex items-center justify-center w-full rounded-full bg-primary/10 text-primary px-4 py-2 text-xs font-medium hover:bg-primary/20 transition-all duration-300"
+            className="inline-flex items-center justify-center w-full rounded-full bg-primary/10 text-primary px-3 sm:px-4 py-2 text-xs font-medium hover:bg-primary/20 transition-all duration-300"
           >
-            Consultar disponibilidad
+            <span className="sm:hidden">Consultar</span>
+            <span className="hidden sm:inline">Consultar disponibilidad</span>
           </a>
         </div>
       </div>
