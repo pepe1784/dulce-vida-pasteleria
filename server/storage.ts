@@ -6,7 +6,9 @@ import type {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function isSQLite(): boolean {
-  return dbType === "sqlite";
+  // Check for the actual SQLite instance — avoids false positives when dbType
+  // is set to "sqlite" as a placeholder for the PostgreSQL path.
+  return !!(dbRef.db?._sqlite);
 }
 
 function sqliteDb(): any {
