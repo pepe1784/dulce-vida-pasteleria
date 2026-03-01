@@ -157,6 +157,9 @@ interface Order {
   createdAt: string;
 }
 
+// Evento global para detectar sesión expirada desde cualquier componente
+const ADMIN_SESSION_EXPIRED = "admin-session-expired";
+
 // API Helpers
 async function apiFetch(url: string, options?: RequestInit) {
   const res = await fetch(url, {
@@ -164,6 +167,11 @@ async function apiFetch(url: string, options?: RequestInit) {
     headers: { "Content-Type": "application/json", ...options?.headers },
     credentials: "include",
   });
+  if (res.status === 401 && url !== "/api/admin/login" && url !== "/api/admin/me") {
+    // Sesión expirada — notificar al componente raíz para regresar al login
+    window.dispatchEvent(new CustomEvent(ADMIN_SESSION_EXPIRED));
+    throw new Error("Sesión expirada. Inicia sesión nuevamente.");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: "Error" }));
     throw new Error(err.message);
@@ -976,7 +984,7 @@ function DashboardTab() {
                 <div key={p.name} className="flex items-center gap-3">
                   <span className="w-6 h-6 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
                   <span className="flex-1 text-sm text-slate-700 truncate">{p.name}</span>
-                  <span className="text-xs text-slate-400">{p.count} venta{p.count !== 1 ? "s" : ""}</span>
+                  <span className="text-xs text-slate-400">{p.totalSold} venta{p.totalSold !== 1 ? "s" : ""}</span>
                   <span className="text-xs font-medium text-emerald-600">{fmt(p.revenue)}</span>
                 </div>
               ))}
@@ -1308,6 +1316,14 @@ export default function Admin() {
       .then((u) => setUser(u))
       .catch(() => {})
       .finally(() => setChecking(false));
+
+    // Escuchar sesión expirada desde cualquier sub-componente
+    const handleExpired = () => {
+      setUser(null);
+      setChecking(false);
+    };
+    window.addEventListener(ADMIN_SESSION_EXPIRED, handleExpired);
+    return () => window.removeEventListener(ADMIN_SESSION_EXPIRED, handleExpired);
   }, []);
 
   async function handleLogout() {

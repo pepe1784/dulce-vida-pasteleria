@@ -8,7 +8,7 @@ import { registerAdminRoutes } from "./admin";
 import { setupGoogleAuth } from "./google-auth";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { dbReady } from "./db";
+import { dbReady, dbRef } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -73,29 +73,9 @@ app.use("/api", apiLimiter);
 app.use("/api/admin", adminLimiter);
 app.use("/api/admin/login", loginLimiter);
 
-// ── Session Middleware ──
+// ── Session + Passport se inicializan dentro del IIFE (después de dbReady)
+// para poder usar connect-pg-simple con el pool de PostgreSQL.
 const MStore = MemoryStore(session as any);
-app.use(
-  session({
-    store: new MStore({ checkPeriod: 86400000 }) as any,
-    secret: (() => {
-      const s = process.env.SESSION_SECRET;
-      if (!s) console.warn("⚠️  SESSION_SECRET no configurado — usa una clave segura en producción!");
-      return s || "change-this-secret-in-production-!!!";
-    })(),
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days for customer sessions
-    },
-  })
-);
-
-// ── Passport (Google OAuth) ──
-app.use(passport.initialize());
 
 // ── Body Parsers (10mb limit for base64 image uploads) ──
 app.use(
@@ -161,6 +141,48 @@ app.use((req, res, next) => {
     console.error("❌ Error fatal inicializando la base de datos:", e.message);
     process.exit(1);
   }
+
+  // ── Configurar sesión con store persistente según el motor de BD ──
+  const sessionSecret = process.env.SESSION_SECRET || "change-this-secret-in-production-!!!";
+  if (!process.env.SESSION_SECRET) {
+    console.warn("⚠️  SESSION_SECRET no configurado — usa una clave segura en producción!");
+  }
+  const cookieConfig = {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: "lax" as const,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+
+  const pgPool = (dbRef.db as any)?.$client;
+  const isPgPool = pgPool && typeof pgPool.query === "function" && typeof pgPool.execute !== "function";
+
+  if (isPgPool) {
+    // Sesiones persistentes en PostgreSQL — sobreviven reinicios de Render
+    const { default: connectPgSimple } = await import("connect-pg-simple");
+    const PgStore = connectPgSimple(session);
+    app.use(session({
+      store: new (PgStore as any)({ pool: pgPool, createTableIfMissing: true }) as any,
+      secret: sessionSecret,
+      resave: false,
+      saveUninitialized: false,
+      cookie: cookieConfig,
+    }));
+    console.log("✅ Sesiones configuradas con PostgreSQL (persistentes)");
+  } else {
+    // Sesiones en memoria para desarrollo local (SQLite)
+    app.use(session({
+      store: new MStore({ checkPeriod: 86400000 }) as any,
+      secret: sessionSecret,
+      resave: false,
+      saveUninitialized: false,
+      cookie: cookieConfig,
+    }));
+    console.log("⚠️  Sesiones en memoria (desarrollo local)");
+  }
+
+  // ── Passport (después de session) ──
+  app.use(passport.initialize());
 
   registerAdminRoutes(app);
   setupGoogleAuth(app);
