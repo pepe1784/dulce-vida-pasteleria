@@ -436,7 +436,7 @@ export function registerAdminRoutes(app: Express) {
   </div>
   <div class="row">
     <span class="lbl">Tipo</span>
-    <span class="val">${order.orderType === "delivery" ? "&#128666; A domicilio" : "&#127978; Para recoger"}</span>
+    <span class="val">${order.orderType === "delivery" ? "A domicilio" : "Para recoger"}</span>
   </div>
   <div class="row">
     <span class="lbl">Pago</span>
@@ -492,11 +492,15 @@ export function registerAdminRoutes(app: Express) {
   </div>
 
   <div class="print-btn no-print">
-    <button onclick="window.print()">&#128424; Imprimir Ticket</button>
+    <button id="printBtn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimir Ticket
+    </button>
   </div>
 
 </div>
 </div>
+<script>document.getElementById('printBtn').addEventListener('click',function(){window.print();});</script>
 </body>
 </html>`;
 
