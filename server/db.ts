@@ -165,6 +165,9 @@ if (isMySQL) {
           BEGIN ALTER TABLE order_items ADD COLUMN product_name TEXT NOT NULL DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE order_items ADD COLUMN quantity INT NOT NULL DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE order_items ADD COLUMN price VARCHAR(20) NOT NULL DEFAULT '0'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- Drop NOT NULL on legacy columns that the current app doesn't supply
+          BEGIN ALTER TABLE orders ALTER COLUMN user_id DROP NOT NULL; EXCEPTION WHEN undefined_column THEN NULL; END;
+          BEGIN ALTER TABLE orders ALTER COLUMN user_id SET DEFAULT NULL; EXCEPTION WHEN undefined_column THEN NULL; END;
         END $$;
       `);
       console.log("✅ Tablas PostgreSQL inicializadas correctamente");
