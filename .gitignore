@@ -11,6 +11,9 @@ vite.config.ts.*
 migrations/*.sql
 dev.db
 dev.db-journal
+dev.db-shm
+dev.db-wal
+server-out.txt
 
 # Backups
 *.bak

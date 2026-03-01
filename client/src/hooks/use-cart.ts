@@ -14,6 +14,8 @@ interface CartStore {
   clearCart: () => void;
   isOpen: boolean;
   toggleCart: () => void;
+  openCart: () => void;
+  closeCart: () => void;
   total: number;
 }
 
@@ -23,6 +25,8 @@ export const useCart = create<CartStore>()(
       items: [],
       isOpen: false,
       toggleCart: () => set({ isOpen: !get().isOpen }),
+      openCart: () => set({ isOpen: true }),
+      closeCart: () => set({ isOpen: false }),
       addItem: (product) => {
         const currentItems = get().items;
         const existingItem = currentItems.find((item) => item.id === product.id);

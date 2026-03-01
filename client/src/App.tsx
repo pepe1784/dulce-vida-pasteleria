@@ -6,11 +6,16 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Admin from "@/pages/Admin";
+import Checkout from "@/pages/Checkout";
+import Orders from "@/pages/Orders";
+import { CartDrawer } from "@/components/CartDrawer";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/checkout" component={Checkout} />
+      <Route path="/mis-pedidos" component={Orders} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
@@ -22,6 +27,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
+        <CartDrawer />
         <Router />
       </TooltipProvider>
     </QueryClientProvider>
@@ -29,3 +35,4 @@ function App() {
 }
 
 export default App;
+

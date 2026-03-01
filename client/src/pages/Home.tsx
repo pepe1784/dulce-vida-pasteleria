@@ -66,7 +66,7 @@ export default function Home() {
       <Navigation />
 
       {/* Hero Section */}
-      <section id="inicio" className="relative h-[90vh] flex items-center overflow-hidden">
+      <section id="inicio" className="relative min-h-[88svh] sm:h-[90vh] flex items-center overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent opacity-60" />
         <div className="absolute top-1/4 -left-20 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
         
@@ -77,7 +77,7 @@ export default function Home() {
                     Postrería Artesanal en Colima
                 </span>
             </div>
-            <h1 className="text-5xl lg:text-7xl xl:text-8xl font-display leading-[1.1]">
+            <h1 className="text-4xl sm:text-5xl lg:text-7xl xl:text-8xl font-display leading-[1.1]">
               Dulces <span className="text-primary italic font-handwriting">momentos</span>,<br />
               hechos con amor.
             </h1>
@@ -85,16 +85,32 @@ export default function Home() {
               Postres caseros elaborados con ingredientes de la más alta calidad. 
               Pasteles, rolls de canela, pays y mucho más para endulzar tu día.
             </p>
-            <div className="flex flex-wrap gap-4 pt-4">
-              <Button size="lg" className="btn-primary h-14 px-8 text-base" onClick={() => scrollToCatalog()}>
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 pt-4">
+              <Button size="lg" className="btn-primary h-12 sm:h-14 px-8 text-base w-full sm:w-auto" onClick={() => scrollToCatalog()}>
                 Ver Catálogo
               </Button>
-              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-                <Button size="lg" variant="outline" className="h-14 px-8 text-base border-primary/20 hover:bg-primary/5">
+              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
+                <Button size="lg" variant="outline" className="h-12 sm:h-14 px-8 text-base border-primary/20 hover:bg-primary/5 w-full">
                   <MessageCircle className="mr-2 h-5 w-5" /> Pedir por WhatsApp
                 </Button>
               </a>
             </div>
+          </div>
+
+          {/* Mobile hero images — 3 circles visible only on small screens */}
+          <div className="flex items-center justify-center gap-3 pt-6 lg:hidden">
+            {[
+              { src: "https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&q=80&w=300", alt: "Pastel" },
+              { src: "https://images.unsplash.com/photo-1558301211-0d8c8ddee6ec?auto=format&fit=crop&q=80&w=300", alt: "Rolls de canela" },
+              { src: "https://images.unsplash.com/photo-1587668178277-295251f900ce?auto=format&fit=crop&q=80&w=300", alt: "Cupcake" },
+            ].map((img, i) => (
+              <div
+                key={i}
+                className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden shadow-lg border-4 border-white flex-shrink-0 ${i === 1 ? "-mt-4" : ""}`}
+              >
+                <img src={img.src} alt={img.alt} className="w-full h-full object-cover" loading="lazy" />
+              </div>
+            ))}
           </div>
 
           <div className="relative hidden lg:block h-[600px] animate-in fade-in zoom-in duration-1000 delay-200">
@@ -228,32 +244,34 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Category Filter Tabs */}
+          {/* Category Filter Tabs - scrollable on mobile */}
           {categories.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-3 mb-12">
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className={`px-4 py-2 rounded-full border text-sm font-medium transition-all cursor-pointer ${
-                  !selectedCategory
-                    ? "bg-primary text-white border-primary"
-                    : "bg-white border-primary/20 text-foreground hover:bg-primary hover:text-white"
-                }`}
-              >
-                Todos
-              </button>
-              {categories.map((cat) => (
+            <div className="mb-10 -mx-4 sm:mx-0 overflow-x-auto scrollbar-hide">
+              <div className="flex gap-2 sm:flex-wrap sm:justify-center px-4 sm:px-0 pb-1 sm:pb-0 w-max sm:w-auto">
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                  className={`px-4 py-2 rounded-full border text-sm font-medium transition-all cursor-pointer ${
-                    selectedCategory === cat
+                  onClick={() => setSelectedCategory(null)}
+                  className={`px-4 py-2 rounded-full border text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${
+                    !selectedCategory
                       ? "bg-primary text-white border-primary"
                       : "bg-white border-primary/20 text-foreground hover:bg-primary hover:text-white"
                   }`}
                 >
-                  {cat}
+                  Todos
                 </button>
-              ))}
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                    className={`px-4 py-2 rounded-full border text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${
+                      selectedCategory === cat
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white border-primary/20 text-foreground hover:bg-primary hover:text-white"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -281,7 +299,7 @@ export default function Home() {
                   <p className="text-sm text-muted-foreground/60 mt-1">Intenta con otro término de búsqueda</p>
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 lg:gap-8">
                 {filteredProducts?.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
@@ -466,6 +484,18 @@ export default function Home() {
             <span>Hecho con ❤️ en Colima, México</span>
         </div>
       </footer>
+
+      {/* Floating WhatsApp button — visible on mobile/tablet only */}
+      <a
+        href={whatsappUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Contactar por WhatsApp"
+        className="fixed bottom-6 right-4 z-50 lg:hidden flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg shadow-green-500/40 transition-all duration-300 hover:scale-105 active:scale-95 px-4 py-3"
+      >
+        <MessageCircle className="w-5 h-5 flex-shrink-0" />
+        <span className="text-sm font-semibold pr-1">WhatsApp</span>
+      </a>
     </div>
   );
 }

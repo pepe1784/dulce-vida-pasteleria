@@ -1,85 +1,149 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
 import * as schema from "@shared/schema";
 
-const { Pool } = pg;
+const dbUrl = process.env.DATABASE_URL || "";
+const isMySQL = dbUrl.startsWith("mysql://") || dbUrl.startsWith("mysql2://");
+const isPostgres = dbUrl.startsWith("postgresql://") || dbUrl.startsWith("postgres://");
 
-// Render usa postgres:// y pg library acepta ambos formatos
-const dbUrl = process.env.DATABASE_URL || '';
-const isPostgres = dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://');
+console.log(`🔍 DATABASE_URL prefix: ${dbUrl ? dbUrl.substring(0, 20) + "..." : "(none)"}`);
+console.log(`🔍 Mode: ${isMySQL ? "MySQL" : isPostgres ? "PostgreSQL→MySQL migrate" : "SQLite (dev)"}`);
 
-console.log(`🔍 DATABASE_URL prefix: ${dbUrl.substring(0, 15)}...`);
-console.log(`🔍 isPostgres: ${isPostgres}`);
-
-let pool: pg.Pool | null = null;
-let db: any;
+// dbRef is a shared container — avoids ESM live-binding issues with tsx
+export const dbRef: { db: any } = { db: undefined };
+let dbType: "mysql" | "sqlite" = "sqlite";
 let dbReady: Promise<void>;
 
-async function initPostgresTables(pool: pg.Pool) {
-  const client = await pool.connect();
-  try {
-    await client.query(`
+if (isMySQL) {
+  // ── Production: MySQL (Hostinger / PlanetScale / Railway) ──
+  dbType = "mysql";
+  dbReady = (async () => {
+    const mysql = await import("mysql2/promise");
+    const { drizzle } = await import("drizzle-orm/mysql2");
+
+    const connection = await mysql.createPool({
+      uri: dbUrl,
+      waitForConnections: true,
+      connectionLimit: 10,
+    });
+
+    dbRef.db = drizzle(connection, { schema, mode: "default" });
+
+    // Create tables if they don't exist
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
+        id INT AUTO_INCREMENT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL,
-        price NUMERIC NOT NULL,
-        stock INTEGER NOT NULL,
+        price VARCHAR(20) NOT NULL,
+        stock INT NOT NULL DEFAULT 50,
         category TEXT NOT NULL,
         image_url TEXT NOT NULL
       );
+    `);
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS orders (
-        id SERIAL PRIMARY KEY,
-        user_id VARCHAR NOT NULL,
-        total NUMERIC NOT NULL,
-        status TEXT NOT NULL DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS order_items (
-        id SERIAL PRIMARY KEY,
-        order_id INTEGER NOT NULL,
-        product_id INTEGER NOT NULL,
-        quantity INTEGER NOT NULL,
-        price NUMERIC NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS admin_users (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'employee',
-        created_at INTEGER
-      );
-      CREATE TABLE IF NOT EXISTS site_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at INTEGER
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_number VARCHAR(30) NOT NULL,
+        customer_name TEXT NOT NULL,
+        customer_phone VARCHAR(25) NOT NULL,
+        order_type VARCHAR(15) NOT NULL DEFAULT 'pickup',
+        payment_method VARCHAR(20) NOT NULL DEFAULT 'cash',
+        cash_amount VARCHAR(20),
+        delivery_address TEXT,
+        subtotal VARCHAR(20) NOT NULL,
+        delivery_cost VARCHAR(20),
+        total VARCHAR(20) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log("✅ Tablas PostgreSQL inicializadas correctamente");
-  } finally {
-    client.release();
-  }
-}
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS order_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        order_id INT NOT NULL,
+        product_id INT NOT NULL,
+        product_name TEXT NOT NULL,
+        quantity INT NOT NULL,
+        price VARCHAR(20) NOT NULL
+      );
+    `);
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role VARCHAR(20) NOT NULL DEFAULT 'employee',
+        created_at INT
+      );
+    `);
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS site_settings (
+        \`key\` VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INT
+      );
+    `);
 
-if (isPostgres) {
-  // Producción: usar PostgreSQL
-  pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  db = drizzle(pool, { schema });
-  dbReady = initPostgresTables(pool).then(() => {
-    console.log("✅ Conectado a PostgreSQL");
-  });
-} else {
-  // Desarrollo: cargar SQLite dinámicamente para evitar crash en producción
-  console.log("⚠️  DATABASE_URL no configurado o no es PostgreSQL. Usando SQLite para desarrollo local.");
-  console.log("📝 Para producción, configura DATABASE_URL en el archivo .env");
-  
+    console.log("✅ Conectado a MySQL");
+  })();
+} else if (isPostgres) {
+  // ── Legacy PostgreSQL (kept for migration period) ──
+  dbType = "sqlite"; // runs pg but storage uses the same interface
   dbReady = (async () => {
-    const { drizzle: drizzleSqlite } = await import("drizzle-orm/better-sqlite3");
-    const { initializeSqlite } = await import("./init-sqlite");
-    const sqlite = initializeSqlite('./dev.db');
-    db = drizzleSqlite(sqlite, { schema });
+    const pg = await import("pg");
+    const { drizzle } = await import("drizzle-orm/node-postgres");
+    const pool = new pg.default.Pool({ connectionString: dbUrl });
+    dbRef.db = drizzle(pool, { schema });
+
+    // Create tables for PostgreSQL (legacy)
+    const client = await pool.connect();
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS products (
+          id SERIAL PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL,
+          price VARCHAR(20) NOT NULL, stock INT NOT NULL DEFAULT 50,
+          category TEXT NOT NULL, image_url TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS orders (
+          id SERIAL PRIMARY KEY, order_number VARCHAR(30) NOT NULL DEFAULT '',
+          customer_name TEXT NOT NULL DEFAULT '', customer_phone VARCHAR(25) NOT NULL DEFAULT '',
+          order_type VARCHAR(15) NOT NULL DEFAULT 'pickup', payment_method VARCHAR(20) NOT NULL DEFAULT 'cash',
+          cash_amount VARCHAR(20), delivery_address TEXT, subtotal VARCHAR(20) NOT NULL DEFAULT '0',
+          delivery_cost VARCHAR(20), total VARCHAR(20) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending',
+          notes TEXT, created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS order_items (
+          id SERIAL PRIMARY KEY, order_id INT NOT NULL, product_id INT NOT NULL,
+          product_name TEXT NOT NULL DEFAULT '', quantity INT NOT NULL, price VARCHAR(20) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS admin_users (
+          id SERIAL PRIMARY KEY, email TEXT NOT NULL, password_hash TEXT NOT NULL,
+          name TEXT NOT NULL, role VARCHAR(20) NOT NULL DEFAULT 'employee', created_at INT
+        );
+        CREATE TABLE IF NOT EXISTS site_settings (
+          key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INT
+        );
+      `);
+      console.log("✅ Conectado a PostgreSQL (modo legado)");
+    } finally {
+      client.release();
+    }
+  })();
+} else {
+  // ── Development: SQLite ──
+  dbType = "sqlite";
+  dbReady = (async () => {
+    try {
+      const { initializeSqlite } = await import("./init-sqlite");
+      const sqlite = initializeSqlite("./dev.db");
+      dbRef.db = { _sqlite: sqlite };
+      console.log("⚠️  Usando SQLite para desarrollo local. Para producción configura DATABASE_URL.");
+    } catch (e: any) {
+      console.error("❌ Error inicializando SQLite:", e.message);
+      throw e;
+    }
   })();
 }
 
-export { db, pool, dbReady };
+export { dbType, dbReady };

@@ -27,6 +27,68 @@ export async function registerRoutes(
     res.json(settings);
   });
 
+  // ── Categorías públicas ──
+  app.get("/api/categories", async (_req, res) => {
+    const categories = await storage.getCategories();
+    res.json(categories);
+  });
+
+  // ── Crear pedido público (desde checkout) ──
+  app.post("/api/orders", async (req, res) => {
+    try {
+      const { customerName, customerPhone, orderType, paymentMethod, cashAmount, deliveryAddress, items, notes } = req.body;
+
+      if (!customerName || !customerPhone || !orderType || !paymentMethod || !items?.length) {
+        return res.status(400).json({ message: "Datos del pedido incompletos" });
+      }
+
+      // Validate and resolve prices from DB (never trust client prices)
+      const resolvedItems: Array<{ productId: number; quantity: number; price: string; productName: string }> = [];
+      let subtotal = 0;
+
+      for (const item of items) {
+        const product = await storage.getProduct(Number(item.productId));
+        if (!product) {
+          return res.status(400).json({ message: `Producto #${item.productId} no encontrado` });
+        }
+        const qty = Math.max(1, Math.min(99, parseInt(item.quantity) || 1));
+        const price = parseFloat(String(product.price));
+        subtotal += price * qty;
+        resolvedItems.push({
+          productId: product.id,
+          quantity: qty,
+          price: price.toFixed(2),
+          productName: product.name,
+        });
+      }
+
+      const deliveryCost = orderType === "delivery" ? null : "0.00";
+      const total = (subtotal + (deliveryCost ? parseFloat(deliveryCost) : 0)).toFixed(2);
+
+      const order = await storage.createOrder(
+        {
+          customerName: String(customerName).trim().slice(0, 200),
+          customerPhone: String(customerPhone).trim().slice(0, 25),
+          orderType: orderType === "delivery" ? "delivery" : "pickup",
+          paymentMethod: ["cash", "transfer", "card"].includes(paymentMethod) ? paymentMethod : "cash",
+          cashAmount: cashAmount ? String(cashAmount).slice(0, 20) : null,
+          deliveryAddress: deliveryAddress ? JSON.stringify(deliveryAddress) : null,
+          subtotal: subtotal.toFixed(2),
+          deliveryCost,
+          total,
+          notes: notes ? String(notes).slice(0, 500) : null,
+          status: "pending",
+          customerGoogleId: (req as any).session?.customer?.googleId ?? null,
+        },
+        resolvedItems
+      );
+
+      return res.status(201).json(order);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
   // Seed Data - Menú real de Endulzarte Postrería & Roll
   if ((await storage.getProducts()).length === 0) {
     const seedProducts = [
@@ -397,6 +459,29 @@ export async function registerRoutes(
     // Siempre actualizar la contraseña para que coincida con el env var
     await storage.updateAdmin(adminExists.id, { passwordHash });
     console.log(`🔄 Admin password actualizado: ${defaultAdminEmail}`);
+  }
+
+  // Seed owner account
+  const ownerEmail = process.env.OWNER_EMAIL || "faguilar@ucol.mx";
+  const ownerName = process.env.OWNER_NAME || "Dueño";
+  const ownerPassword = process.env.OWNER_PASSWORD || "owner123";
+  const ownerSalt = randomBytes(16).toString("hex");
+  const ownerHash = scryptSync(ownerPassword, ownerSalt, 64).toString("hex");
+  const ownerPasswordHash = `${ownerSalt}:${ownerHash}`;
+
+  const ownerExists = await storage.getAdminByEmail(ownerEmail);
+  if (!ownerExists) {
+    await storage.createAdmin({
+      email: ownerEmail,
+      passwordHash: ownerPasswordHash,
+      name: ownerName,
+      role: "owner",
+    });
+    console.log(`✅ Owner creado: ${ownerEmail}`);
+  } else {
+    // Siempre sincronizar contraseña y role del owner con las variables de entorno
+    await storage.updateAdmin(ownerExists.id, { role: "owner", passwordHash: ownerPasswordHash });
+    console.log(`🔄 Owner password/role sincronizado: ${ownerEmail}`);
   }
 
   return httpServer;

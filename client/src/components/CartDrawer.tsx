@@ -7,8 +7,10 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function CartDrawer() {
-  const { items, isOpen, toggleCart, removeItem, updateQuantity, total } = useCart();
+  const { items, isOpen, toggleCart, removeItem, updateQuantity } = useCart();
   const [, setLocation] = useLocation();
+  // Compute total locally — zustand getters are lost after persist rehydration
+  const total = items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
 
   const handleCheckout = () => {
     toggleCart();
@@ -80,7 +82,7 @@ export function CartDrawer() {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.id, Math.min(item.quantity + 1, item.stock))}
                             className="p-1 hover:bg-muted rounded-full transition-colors"
                           >
                             <Plus className="h-3 w-3" />

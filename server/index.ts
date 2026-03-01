@@ -1,9 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import passport from "passport";
 import MemoryStore from "memorystore";
 import path from "path";
 import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./admin";
+import { setupGoogleAuth } from "./google-auth";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { dbReady } from "./db";
@@ -17,17 +19,83 @@ declare module "http" {
   }
 }
 
+// ── Security: Helmet ─────────────────────────────────────────────────
+import helmet from "helmet";
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://fonts.googleapis.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
+      connectSrc: ["'self'", "https:"],
+      frameAncestors: ["'none'"],
+      formAction: ["'self'", "https://accounts.google.com"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+// Permissions-Policy (Helmet v8 doesn't expose it yet via typed API)
+app.use((_req, res, next) => {
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  next();
+});
+
+// ── Security: Rate Limiting ─────────────────────────────────────────
+import rateLimit from "express-rate-limit";
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  message: { message: "Demasiadas solicitudes, intenta más tarde." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  message: { message: "Demasiados intentos, intenta en 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { message: "Demasiados intentos de inicio de sesión. Intenta en 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api", apiLimiter);
+app.use("/api/admin", adminLimiter);
+app.use("/api/admin/login", loginLimiter);
+
 // ── Session Middleware ──
 const MStore = MemoryStore(session as any);
 app.use(
   session({
     store: new MStore({ checkPeriod: 86400000 }) as any,
-    secret: process.env.SESSION_SECRET || "change-this-secret-in-production",
+    secret: (() => {
+      const s = process.env.SESSION_SECRET;
+      if (!s) console.warn("⚠️  SESSION_SECRET no configurado — usa una clave segura en producción!");
+      return s || "change-this-secret-in-production-!!!";
+    })(),
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 },
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days for customer sessions
+    },
   })
 );
+
+// ── Passport (Google OAuth) ──
+app.use(passport.initialize());
 
 // ── Body Parsers (10mb limit for base64 image uploads) ──
 app.use(
@@ -42,7 +110,14 @@ app.use(
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 // ── Serve uploaded images ──
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads"), {
+  dotfiles: "deny",
+  index: false,
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+  },
+}));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -51,7 +126,6 @@ export function log(message: string, source = "express") {
     second: "2-digit",
     hour12: true,
   });
-
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
@@ -73,7 +147,6 @@ app.use((req, res, next) => {
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       log(logLine);
     }
   });
@@ -82,24 +155,22 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Esperar a que la base de datos esté lista (SQLite carga dinámicamente en dev)
-  await dbReady;
+  try {
+    await dbReady;
+  } catch (e: any) {
+    console.error("❌ Error fatal inicializando la base de datos:", e.message);
+    process.exit(1);
+  }
 
-  // Register admin routes first
   registerAdminRoutes(app);
-
+  setupGoogleAuth(app);
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     console.error("Internal Server Error:", err);
-
-    if (res.headersSent) {
-      return next(err);
-    }
-
+    if (res.headersSent) return next(err);
     return res.status(status).json({ message });
   });
 
@@ -111,18 +182,12 @@ app.use((req, res, next) => {
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
-  
-  const isWindows = process.platform === 'win32';
-  const listenOptions: any = {
-    port,
-    host: "0.0.0.0",
-  };
-  
-  if (!isWindows) {
-    listenOptions.reusePort = true;
-  }
-  
+  const isWindows = process.platform === "win32";
+  const listenOptions: any = { port, host: "0.0.0.0" };
+  if (!isWindows) listenOptions.reusePort = true;
+
   httpServer.listen(listenOptions, () => {
     log(`serving on port ${port}`);
   });
 })();
+

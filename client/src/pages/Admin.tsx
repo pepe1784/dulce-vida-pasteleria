@@ -14,6 +14,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -52,8 +62,55 @@ import {
   Menu,
   X,
   FolderPlus,
+  LayoutDashboard,
+  ShoppingBag,
+  Folders,
+  Printer,
+  Crown,
   type LucideIcon,
 } from "lucide-react";
+
+// ── Gravatar Avatar ──────────────────────────────────────────────────────────
+function AdminAvatar({ email, name, size = 36, className = "" }: { email: string; name: string; size?: number; className?: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const normalized = email.trim().toLowerCase();
+        const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
+        const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+        if (!cancelled) setSrc(`https://www.gravatar.com/avatar/${hex}?s=${size * 2}&d=404&r=pg`);
+      } catch { /* no-op */ }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [email, size]);
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        width={size}
+        height={size}
+        className={`rounded-full object-cover flex-shrink-0 ${className}`}
+        style={{ width: size, height: size }}
+        onError={() => setSrc(null)}
+      />
+    );
+  }
+  return (
+    <div
+      className={`rounded-full bg-gradient-to-br from-rose-200 to-pink-200 flex items-center justify-center flex-shrink-0 ${className}`}
+      style={{ width: size, height: size }}
+    >
+      <span className="text-rose-600 font-bold" style={{ fontSize: size * 0.33 }}>
+        {name.charAt(0).toUpperCase()}
+      </span>
+    </div>
+  );
+}
 
 // Types
 interface AdminUser {
@@ -73,7 +130,32 @@ interface Product {
   imageUrl: string;
 }
 
-type TabKey = "products" | "settings" | "users";
+type TabKey = "dashboard" | "products" | "categories" | "orders" | "settings" | "users";
+
+interface DashboardStats {
+  totalRevenue: number;
+  todayRevenue: number;
+  totalOrders: number;
+  todayOrders: number;
+  pendingOrders: number;
+  weeklyOrders: number;
+  averageOrderValue: number;
+  topProducts: { name: string; count: number; revenue: number }[];
+  recentOrders: any[];
+  revenueByCategory: { category: string; revenue: number }[];
+}
+
+interface Order {
+  id: number;
+  orderNumber: string;
+  customerName: string;
+  customerPhone: string;
+  orderType: string;
+  paymentMethod: string;
+  status: string;
+  total: string;
+  createdAt: string;
+}
 
 // API Helpers
 async function apiFetch(url: string, options?: RequestInit) {
@@ -488,6 +570,36 @@ function SettingsTab({ user }: { user: AdminUser }) {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  // ── Profile state ──────────────────────────────────────────────────────────────────
+  const [profile, setProfile] = useState({ name: user.name, email: user.email, password: "", confirmPassword: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  async function handleSaveProfile() {
+    if (profile.password && profile.password !== profile.confirmPassword) {
+      toast({ title: "Error", description: "Las contraseñas no coinciden", variant: "destructive" });
+      return;
+    }
+    const body: Record<string, string> = {};
+    if (profile.name.trim() && profile.name !== user.name) body.name = profile.name.trim();
+    if (profile.email.trim() && profile.email !== user.email) body.email = profile.email.trim();
+    if (profile.password) body.password = profile.password;
+    if (!Object.keys(body).length) {
+      toast({ title: "Sin cambios", description: "No hay nada nuevo que guardar." });
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      await apiFetch(`/api/admin/users/${user.id}`, { method: "PUT", body: JSON.stringify(body) });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/me"] });
+      setProfile((p) => ({ ...p, password: "", confirmPassword: "" }));
+      toast({ title: "✅ Perfil actualizado", description: "Los cambios se aplicaron correctamente." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   const { data, isLoading } = useQuery<Record<string, string>>({
     queryKey: ["/api/admin/settings"],
     queryFn: () => apiFetch("/api/admin/settings"),
@@ -522,24 +634,8 @@ function SettingsTab({ user }: { user: AdminUser }) {
     );
   }
 
-  const isAdmin = user.role === "admin";
-
-  function SectionCard({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description?: string; children: React.ReactNode }) {
-    return (
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center gap-3">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
-            <Icon className="w-4 h-4 text-rose-500" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-slate-800 text-sm sm:text-[15px]">{title}</h3>
-            {description && <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">{description}</p>}
-          </div>
-        </div>
-        <div className="p-4 sm:p-6 space-y-4">{children}</div>
-      </div>
-    );
-  }
+  // owner also gets all admin-level settings
+  const isAdmin = user.role === "admin" || user.role === "owner";
 
   return (
     <div className="space-y-5 sm:space-y-6 max-w-2xl">
@@ -547,6 +643,69 @@ function SettingsTab({ user }: { user: AdminUser }) {
         <h2 className="text-lg sm:text-xl font-bold text-slate-800" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Configuracion</h2>
         <p className="text-xs sm:text-sm text-slate-400 mt-0.5">Administra la informacion del sitio web</p>
       </div>
+
+      {/* ─ MI PERFIL ─ */}
+      <SectionCard icon={Users} title="Mi Perfil" description="Cambia tu nombre, email o contraseña">
+        <div>
+          <label className={labelClass}>Nombre</label>
+          <Input
+            value={profile.name}
+            onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+            className="bg-slate-50/50 border-slate-200"
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Email</label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              type="email"
+              value={profile.email}
+              onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
+              className="pl-10 bg-slate-50/50 border-slate-200"
+            />
+          </div>
+        </div>
+        <div>
+          <label className={labelClass}>Nueva contraseña <span className="text-slate-300 font-normal">(dejar vacío para no cambiar)</span></label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Input
+              type="password"
+              value={profile.password}
+              onChange={(e) => setProfile((p) => ({ ...p, password: e.target.value }))}
+              placeholder="••••••••"
+              className="pl-10 bg-slate-50/50 border-slate-200"
+            />
+          </div>
+        </div>
+        {profile.password && (
+          <div>
+            <label className={labelClass}>Confirmar contraseña</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                type="password"
+                value={profile.confirmPassword}
+                onChange={(e) => setProfile((p) => ({ ...p, confirmPassword: e.target.value }))}
+                placeholder="••••••••"
+                className="pl-10 bg-slate-50/50 border-slate-200"
+              />
+            </div>
+          </div>
+        )}
+        <Button
+          onClick={handleSaveProfile}
+          disabled={savingProfile}
+          className="bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white shadow-md shadow-rose-200/40 w-full sm:w-auto"
+        >
+          {savingProfile ? (
+            <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</span>
+          ) : (
+            <span className="flex items-center gap-2"><Save className="w-4 h-4" /> Guardar Perfil</span>
+          )}
+        </Button>
+      </SectionCard>
 
       {isAdmin && (
         <SectionCard icon={Share2} title="Redes Sociales" description="Enlaces a tus perfiles sociales">
@@ -585,6 +744,24 @@ function SettingsTab({ user }: { user: AdminUser }) {
           )}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Extracted outside SettingsTab so React doesn't remount it on every keystroke
+function SectionCard({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 flex items-center gap-3">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+          <Icon className="w-4 h-4 text-rose-500" />
+        </div>
+        <div>
+          <h3 className="font-semibold text-slate-800 text-sm sm:text-[15px]">{title}</h3>
+          {description && <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">{description}</p>}
+        </div>
+      </div>
+      <div className="p-4 sm:p-6 space-y-4">{children}</div>
     </div>
   );
 }
@@ -629,6 +806,7 @@ function UsersTab() {
   }
 
   const roleConfig: Record<string, { label: string; color: string; icon: LucideIcon }> = {
+    owner: { label: "Owner/Dueño", color: "bg-purple-50 text-purple-700 border-purple-200", icon: Crown },
     admin: { label: "Administrador", color: "bg-rose-50 text-rose-700 border-rose-200", icon: Shield },
     editor: { label: "Editor", color: "bg-indigo-50 text-indigo-700 border-indigo-200", icon: FileText },
     employee: { label: "Empleado", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Package },
@@ -672,6 +850,7 @@ function UsersTab() {
                 <Select value={u.role} onValueChange={(role) => updateRoleMutation.mutate({ id: u.id, role })}>
                   <SelectTrigger className="w-[130px] sm:w-[150px] bg-slate-50/50 border-slate-200 text-xs sm:text-sm h-8 sm:h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="owner">Owner/Dueño</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                     <SelectItem value="editor">Editor</SelectItem>
                     <SelectItem value="employee">Empleado</SelectItem>
@@ -702,6 +881,7 @@ function UsersTab() {
               <Select value={newUser.role} onValueChange={(v) => setNewUser(n => ({ ...n, role: v }))}>
                 <SelectTrigger className="bg-slate-50/50 border-slate-200"><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="owner">Owner/Dueño</SelectItem>
                   <SelectItem value="admin">Administrador</SelectItem>
                   <SelectItem value="editor">Editor</SelectItem>
                   <SelectItem value="employee">Empleado</SelectItem>
@@ -729,6 +909,388 @@ function UsersTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// DASHBOARD TAB
+function DashboardTab() {
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
+    queryKey: ["/api/admin/dashboard"],
+    queryFn: () => apiFetch("/api/admin/dashboard"),
+    refetchInterval: 60_000,
+  });
+
+  if (isLoading || !stats) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-rose-400 mr-3" />
+        <span className="text-slate-400">Cargando estadisticas...</span>
+      </div>
+    );
+  }
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 0 }).format(n);
+
+  const statCards = [
+    { label: "Ingresos Totales", value: fmt(stats.totalRevenue), icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200" },
+    { label: "Ingresos Hoy", value: fmt(stats.todayRevenue), icon: DollarSign, color: "text-rose-600", bg: "bg-rose-50", border: "border-rose-200" },
+    { label: "Pedidos Totales", value: stats.totalOrders, icon: ShoppingBag, color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-200" },
+    { label: "Pedidos Hoy", value: stats.todayOrders ?? 0, icon: ShoppingBag, color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200" },
+    { label: "Pendientes", value: stats.pendingOrders, icon: Clock, color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200" },
+    { label: "Esta Semana", value: stats.weeklyOrders, icon: LayoutDashboard, color: "text-sky-600", bg: "bg-sky-50", border: "border-sky-200" },
+  ];
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h2 className="text-lg sm:text-xl font-bold text-slate-800" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Dashboard</h2>
+        <p className="text-xs sm:text-sm text-slate-400 mt-0.5">Resumen de ventas y pedidos</p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+        {statCards.map((s) => {
+          const Icon = s.icon;
+          return (
+            <div key={s.label} className={`bg-white rounded-xl border ${s.border} p-4 shadow-sm`}>
+              <div className={`w-9 h-9 rounded-lg ${s.bg} flex items-center justify-center mb-3`}>
+                <Icon className={`w-5 h-5 ${s.color}`} />
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{s.value}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{s.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top Products */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+            <Package className="w-4 h-4 text-rose-400" /> Productos Mas Vendidos
+          </h3>
+          {stats.topProducts && stats.topProducts.length > 0 ? (
+            <div className="space-y-2">
+              {stats.topProducts.slice(0, 6).map((p, i) => (
+                <div key={p.name} className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
+                  <span className="flex-1 text-sm text-slate-700 truncate">{p.name}</span>
+                  <span className="text-xs text-slate-400">{p.count} venta{p.count !== 1 ? "s" : ""}</span>
+                  <span className="text-xs font-medium text-emerald-600">{fmt(p.revenue)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 py-4 text-center">Sin datos todavia</p>
+          )}
+        </div>
+
+        {/* Recent Orders */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+            <ShoppingBag className="w-4 h-4 text-rose-400" /> Pedidos Recientes
+          </h3>
+          {stats.recentOrders && stats.recentOrders.length > 0 ? (
+            <div className="space-y-2">
+              {stats.recentOrders.slice(0, 6).map((o: any) => (
+                <div key={o.id} className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-slate-500 flex-shrink-0">#{o.orderNumber}</span>
+                  <span className="flex-1 text-sm text-slate-700 truncate">{o.customerName}</span>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                    o.status === "delivered" ? "bg-emerald-50 text-emerald-700" :
+                    o.status === "cancelled" ? "bg-red-50 text-red-700" :
+                    o.status === "ready" ? "bg-sky-50 text-sky-700" :
+                    "bg-amber-50 text-amber-700"
+                  }`}>{o.status}</span>
+                  <span className="text-xs font-medium text-emerald-600">{fmt(Number(o.total))}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 py-4 text-center">Sin pedidos todavia</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// CATEGORIES TAB
+function CategoriesTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [deletingName, setDeletingName] = useState<string | null>(null);
+  const [reassignTo, setReassignTo] = useState("");
+  const [newCatName, setNewCatName] = useState("");
+  const [showNew, setShowNew] = useState(false);
+
+  const { data: categories = [], isLoading } = useQuery<string[]>({
+    queryKey: ["/api/admin/categories"],
+    queryFn: () => apiFetch("/api/admin/categories"),
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: ({ oldName, newName }: { oldName: string; newName: string }) =>
+      apiFetch("/api/admin/categories/rename", { method: "PUT", body: JSON.stringify({ oldName, newName }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      setEditingName(null);
+      toast({ title: "Categoria actualizada" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: ({ name, reassign }: { name: string; reassign?: string }) => {
+      const url = `/api/admin/categories/${encodeURIComponent(name)}${reassign ? `?reassignTo=${encodeURIComponent(reassign)}` : ""}`;
+      return apiFetch(url, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      setDeletingName(null);
+      toast({ title: "Categoria eliminada" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (name: string) =>
+      apiFetch("/api/admin/categories", { method: "POST", body: JSON.stringify({ name }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+      setShowNew(false);
+      setNewCatName("");
+      toast({ title: "Categoria creada" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-rose-400 mr-3" />
+        <span className="text-slate-400">Cargando categorias...</span>
+      </div>
+    );
+  }
+
+  const otherCategories = deletingName ? categories.filter((c) => c !== deletingName) : [];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Categorias</h2>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">{categories.length} categorias</p>
+        </div>
+        <Button onClick={() => setShowNew(true)} size="sm" className="bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white shadow-md shadow-rose-200/40 h-9">
+          <FolderPlus className="w-4 h-4 mr-1.5" />Nueva
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {categories.map((cat) => (
+          <div key={cat} className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-center gap-3 hover:border-slate-300 transition-colors">
+            <Folders className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            {editingName === cat ? (
+              <div className="flex-1 flex items-center gap-2">
+                <Input
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="h-8 text-sm bg-slate-50 border-slate-200"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") renameMutation.mutate({ oldName: cat, newName: editValue });
+                    if (e.key === "Escape") setEditingName(null);
+                  }}
+                  autoFocus
+                />
+                <Button size="sm" className="h-8 bg-rose-500 hover:bg-rose-600 text-white px-3" onClick={() => renameMutation.mutate({ oldName: cat, newName: editValue })} disabled={renameMutation.isPending}>
+                  {renameMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 px-3 border-slate-200" onClick={() => setEditingName(null)}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <span className="flex-1 text-sm font-medium text-slate-700">{cat}</span>
+                <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-slate-200 hover:bg-slate-50" onClick={() => { setEditingName(cat); setEditValue(cat); }}>
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-slate-200 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => { setDeletingName(cat); setReassignTo(""); }}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* New category dialog */}
+      <Dialog open={showNew} onOpenChange={setShowNew}>
+        <DialogContent className="mx-4 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+              <FolderPlus className="w-5 h-5 text-rose-500" />Nueva Categoria
+            </DialogTitle>
+          </DialogHeader>
+          <div className="pt-2">
+            <label className={labelClass}>Nombre de la categoria</label>
+            <Input value={newCatName} onChange={(e) => setNewCatName(e.target.value)} className="bg-slate-50/50 border-slate-200" placeholder="Ej: Cupcakes" autoFocus onKeyDown={(e) => { if (e.key === "Enter" && newCatName.trim()) createMutation.mutate(newCatName.trim()); }} />
+          </div>
+          <DialogFooter className="pt-2 flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowNew(false)} className="border-slate-200 w-full sm:w-auto">Cancelar</Button>
+            <Button onClick={() => createMutation.mutate(newCatName.trim())} className="bg-gradient-to-r from-rose-500 to-pink-600 text-white w-full sm:w-auto" disabled={!newCatName.trim() || createMutation.isPending}>
+              {createMutation.isPending ? <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Creando...</span> : <span className="flex items-center gap-2"><Plus className="w-4 h-4" />Crear</span>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm dialog */}
+      <AlertDialog open={!!deletingName} onOpenChange={(open) => { if (!open) setDeletingName(null); }}>
+        <AlertDialogContent className="mx-4 sm:mx-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar categoria "{deletingName}"</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>Esta accion eliminara la categoria. Los productos vinculados quedaran sin categoria.</p>
+              {otherCategories.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700 mb-1">Reasignar productos a (opcional):</p>
+                  <Select value={reassignTo} onValueChange={setReassignTo}>
+                    <SelectTrigger className="bg-slate-50 border-slate-200"><SelectValue placeholder="Dejar sin categoria" /></SelectTrigger>
+                    <SelectContent>
+                      {otherCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="border-slate-200 w-full sm:w-auto">Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-500 hover:bg-red-600 text-white w-full sm:w-auto" onClick={() => deletingName && deleteMutation.mutate({ name: deletingName, reassign: reassignTo || undefined })}>
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ORDERS TAB
+function OrdersTab() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: orders = [], isLoading } = useQuery<Order[]>({
+    queryKey: ["/api/admin/orders"],
+    queryFn: () => apiFetch("/api/admin/orders"),
+    refetchInterval: 30_000,
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      apiFetch(`/api/admin/orders/${id}/status`, { method: "PUT", body: JSON.stringify({ status }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] }); toast({ title: "Estado actualizado" }); },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const statusOptions = [
+    { value: "pending", label: "Pendiente", color: "bg-amber-50 text-amber-700 border-amber-200" },
+    { value: "confirmed", label: "Confirmado", color: "bg-sky-50 text-sky-700 border-sky-200" },
+    { value: "preparing", label: "Preparando", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+    { value: "ready", label: "Listo", color: "bg-lime-50 text-lime-700 border-lime-200" },
+    { value: "delivered", label: "Entregado", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    { value: "cancelled", label: "Cancelado", color: "bg-red-50 text-red-700 border-red-200" },
+  ];
+
+  const getStatusColor = (status: string) => statusOptions.find((s) => s.value === status)?.color ?? "bg-slate-50 text-slate-700 border-slate-200";
+  const getStatusLabel = (status: string) => statusOptions.find((s) => s.value === status)?.label ?? status;
+
+  const paymentLabels: Record<string, string> = {
+    efectivo: "Efectivo",
+    transferencia: "Transferencia",
+    tarjeta: "Tarjeta",
+  };
+
+  const typeLabels: Record<string, string> = {
+    domicilio: "Domicilio",
+    recoger: "Recoger",
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-rose-400 mr-3" />
+        <span className="text-slate-400">Cargando pedidos...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Pedidos</h2>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5">{orders.length} pedidos registrados</p>
+        </div>
+        <Button variant="outline" size="sm" className="h-9 border-slate-200 text-slate-600 hover:bg-slate-50" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] })}>
+          Actualizar
+        </Button>
+      </div>
+
+      {orders.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 py-16 text-center">
+          <ShoppingBag className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+          <p className="text-slate-400 text-sm">No hay pedidos todavia</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {orders.map((order) => (
+            <div key={order.id} className="bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 transition-colors">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-rose-600">#{order.orderNumber}</span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium border ${getStatusColor(order.status)}`}>{getStatusLabel(order.status)}</span>
+                  </div>
+                  <p className="font-semibold text-slate-800 text-sm mt-1">{order.customerName}</p>
+                  <p className="text-xs text-slate-400">{order.customerPhone}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-emerald-600">${Number(order.total).toLocaleString("es-MX")}</p>
+                  <p className="text-[11px] text-slate-400">{typeLabels[order.orderType] ?? order.orderType} · {paymentLabels[order.paymentMethod] ?? order.paymentMethod}</p>
+                  <p className="text-[11px] text-slate-400">{new Date(order.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
+                <Select value={order.status} onValueChange={(status) => updateStatusMutation.mutate({ id: order.id, status })}>
+                  <SelectTrigger className="w-[140px] h-8 text-xs bg-slate-50/50 border-slate-200"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-slate-200 text-slate-600 hover:bg-slate-50 text-xs"
+                  onClick={() => window.open(`/api/admin/orders/${order.id}/ticket`, "_blank")}
+                >
+                  <Printer className="w-3.5 h-3.5 mr-1.5" />Ticket
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -765,15 +1327,19 @@ export default function Admin() {
   if (!user) return <AdminLogin onLogin={setUser} />;
 
   const roleConfig: Record<string, { label: string; color: string }> = {
+    owner: { label: "Owner", color: "bg-purple-50 text-purple-700 border-purple-200" },
     admin: { label: "Admin", color: "bg-rose-50 text-rose-700 border-rose-200" },
     editor: { label: "Editor", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
     employee: { label: "Empleado", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   };
 
   const navItems: { key: TabKey; label: string; icon: LucideIcon; roles: string[] }[] = [
-    { key: "products", label: "Productos", icon: Package, roles: ["admin", "editor", "employee"] },
-    { key: "settings", label: "Configuracion", icon: Settings, roles: ["admin", "editor"] },
-    { key: "users", label: "Usuarios", icon: Users, roles: ["admin"] },
+    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "owner"] },
+    { key: "products", label: "Productos", icon: Package, roles: ["admin", "editor", "employee", "owner"] },
+    { key: "orders", label: "Pedidos", icon: ShoppingBag, roles: ["admin", "editor", "employee", "owner"] },
+    { key: "categories", label: "Categorias", icon: Folders, roles: ["admin", "editor", "owner"] },
+    { key: "settings", label: "Configuracion", icon: Settings, roles: ["admin", "editor", "owner"] },
+    { key: "users", label: "Usuarios", icon: Users, roles: ["admin", "owner"] },
   ];
 
   const visibleNav = navItems.filter((item) => item.roles.includes(user.role));
@@ -822,9 +1388,7 @@ export default function Admin() {
         </button>
         <div className="bg-slate-50 rounded-xl p-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-200 to-pink-200 flex items-center justify-center flex-shrink-0">
-              <span className="text-rose-600 font-bold text-xs">{user.name.charAt(0).toUpperCase()}</span>
-            </div>
+            <AdminAvatar email={user.email} name={user.name} size={36} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-700 truncate">{user.name}</p>
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${userRoleConfig.color}`}>{userRoleConfig.label}</span>
@@ -856,9 +1420,7 @@ export default function Admin() {
           </div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${userRoleConfig.color}`}>{userRoleConfig.label}</span>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-rose-200 to-pink-200 flex items-center justify-center">
-              <span className="text-rose-600 font-bold text-xs">{user.name.charAt(0).toUpperCase()}</span>
-            </div>
+            <AdminAvatar email={user.email} name={user.name} size={32} />
           </div>
         </div>
       </header>
@@ -885,7 +1447,7 @@ export default function Admin() {
             <div className="flex items-center gap-2 text-sm">
               <Home className="w-4 h-4 text-slate-400" />
               <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-              <span className="text-slate-700 font-medium">{activeTab === "products" ? "Productos" : activeTab === "settings" ? "Configuracion" : "Usuarios"}</span>
+              <span className="text-slate-700 font-medium">{activeTab === "dashboard" ? "Dashboard" : activeTab === "products" ? "Productos" : activeTab === "orders" ? "Pedidos" : activeTab === "categories" ? "Categorias" : activeTab === "settings" ? "Configuracion" : "Usuarios"}</span>
             </div>
             <p className="text-xs text-slate-400">Conectado como <strong className="text-slate-600">{user.email}</strong></p>
           </div>
@@ -905,7 +1467,10 @@ export default function Admin() {
         </div>
 
         <div className="p-4 sm:p-6 md:p-8">
+          {activeTab === "dashboard" && <DashboardTab />}
           {activeTab === "products" && <ProductsTab user={user} />}
+          {activeTab === "orders" && <OrdersTab />}
+          {activeTab === "categories" && <CategoriesTab />}
           {activeTab === "settings" && <SettingsTab user={user} />}
           {activeTab === "users" && <UsersTab />}
         </div>
