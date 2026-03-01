@@ -309,14 +309,14 @@ export class DatabaseStorage {
 
   // ── Site Settings ─────────────────────────────────────────────────────────
   async getAllSettings(): Promise<Record<string, string>> {
-    const rows = await rawQuery("SELECT `key`, value FROM site_settings");
+    const rows = await rawQuery("SELECT key, value FROM site_settings");
     const out: Record<string, string> = {};
     for (const r of rows) out[r.key] = r.value;
     return out;
   }
 
   async getSetting(key: string): Promise<string | undefined> {
-    const rows = await rawQuery("SELECT value FROM site_settings WHERE `key` = ?", [key]);
+    const rows = await rawQuery("SELECT value FROM site_settings WHERE key = ?", [key]);
     return rows[0]?.value;
   }
 
@@ -324,9 +324,9 @@ export class DatabaseStorage {
     if (isSQLite()) {
       await rawRun("INSERT OR REPLACE INTO site_settings (key, value) VALUES (?, ?)", [key, value]);
     } else {
-      // MySQL upsert
+      // PostgreSQL upsert
       await rawRun(
-        "INSERT INTO site_settings (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)",
+        "INSERT INTO site_settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
         [key, value]
       );
     }
