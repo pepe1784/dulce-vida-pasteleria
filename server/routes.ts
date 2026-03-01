@@ -52,6 +52,12 @@ export async function registerRoutes(
           return res.status(400).json({ message: `Producto #${item.productId} no encontrado` });
         }
         const qty = Math.max(1, Math.min(99, parseInt(item.quantity) || 1));
+        // Stock validation — can't order more than available
+        if (product.stock < qty) {
+          return res.status(400).json({
+            message: `Stock insuficiente para "${product.name}". Disponible: ${product.stock} unidad${product.stock !== 1 ? "es" : ""}.`,
+          });
+        }
         const price = parseFloat(String(product.price));
         subtotal += price * qty;
         resolvedItems.push({
@@ -83,7 +89,39 @@ export async function registerRoutes(
         resolvedItems
       );
 
+      // Decrement stock for each item
+      for (const ri of resolvedItems) {
+        const current = await storage.getProduct(ri.productId);
+        if (current) {
+          await storage.updateProduct(ri.productId, { stock: Math.max(0, current.stock - ri.quantity) });
+        }
+      }
+
       return res.status(201).json(order);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ── Cancelar pedido pendiente (cuando el usuario NO confirma en WhatsApp) ──
+  app.delete("/api/orders/:id/cancel", async (req, res) => {
+    try {
+      const orderId = Number(req.params.id);
+      if (!orderId) return res.status(400).json({ message: "ID inválido" });
+      const order = await storage.getOrderWithItems(orderId);
+      if (!order) return res.status(404).json({ message: "Pedido no encontrado" });
+      if (order.status !== "pending") return res.status(400).json({ message: "Solo se puede cancelar un pedido pendiente" });
+      // Restore stock
+      if (order.items) {
+        for (const item of order.items) {
+          const product = await storage.getProduct(item.productId);
+          if (product) {
+            await storage.updateProduct(item.productId, { stock: product.stock + item.quantity });
+          }
+        }
+      }
+      await storage.updateOrderStatus(orderId, "cancelled");
+      return res.json({ ok: true });
     } catch (e: any) {
       return res.status(500).json({ message: e.message });
     }

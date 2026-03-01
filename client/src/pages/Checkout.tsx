@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Copy, Check, MapPin, MessageCircle, Truck, Store } from "lucide-react";
+import { ArrowLeft, Copy, Check, MapPin, MessageCircle, Truck, Store, CheckCircle2, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -50,6 +50,9 @@ export default function Checkout() {
   const [cashAmount, setCashAmount] = useState("");
   const [address, setAddress] = useState({ colonia: "", calle: "", numero: "", entre: "", referencias: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Confirmación posterior al registro del pedido
+  const [confirming, setConfirming] = useState<{ id: number; orderNumber: string } | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Pre-fill from Google profile (runs once when customer loads)
   useEffect(() => {
@@ -181,7 +184,7 @@ export default function Checkout() {
     }
   };
 
-  if (items.length === 0) {
+  if (items.length === 0 && !confirming) {
     return (
       <div className="min-h-screen bg-secondary/30">
         <Navigation />
@@ -197,10 +200,63 @@ export default function Checkout() {
     );
   }
 
+  // ── CONFIRMATION STEP ──
+  if (confirming) {
+    return (
+      <div className="min-h-screen bg-secondary/30">
+        <Navigation />
+        <div className="container-custom pt-32 max-w-lg">
+          <div className="bg-white rounded-2xl p-8 shadow-sm text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-8 h-8 text-green-600" />
+            </div>
+            <h2 className="text-2xl font-display font-bold mb-1">¡Pedido registrado!</h2>
+            <p className="text-muted-foreground mb-1">Número de pedido:</p>
+            <p className="text-2xl font-mono font-bold text-primary mb-6">{confirming.orderNumber}</p>
+            <div className="bg-secondary/50 rounded-xl p-4 text-left mb-6 space-y-2">
+              <p className="text-sm font-semibold text-slate-700 mb-2">Resumen del pedido</p>
+              {items.map((item) => (
+                <div key={item.id} className="flex justify-between text-sm">
+                  <span>{item.quantity}x {item.name}</span>
+                  <span className="font-medium">${(Number(item.price) * item.quantity).toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="border-t border-border/50 pt-2 flex justify-between font-bold">
+                <span>Total</span>
+                <span className="text-primary">${subtotal.toFixed(2)}{orderType === "delivery" ? " + envío" : ""}</span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              Confirma para enviar tu pedido por WhatsApp y coordinar la entrega.
+              Si cancelas, tus productos regresan al inventario.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button
+                onClick={handleConfirmOrder}
+                className="w-full h-12 bg-green-500 hover:bg-green-600 text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-green-200"
+              >
+                <MessageCircle className="h-5 w-5" />
+                Confirmar y enviar por WhatsApp
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCancelOrder}
+                disabled={isCancelling}
+                className="w-full h-10 text-red-500 border-red-200 hover:bg-red-50"
+              >
+                <X className="h-4 w-4 mr-2" />
+                {isCancelling ? "Cancelando..." : "Cancelar pedido"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-secondary/30 pb-24">
       <Navigation />
-
       <div className="container-custom pt-32 max-w-3xl">
         <Link href="/" className="inline-flex items-center text-muted-foreground hover:text-primary mb-6 transition-colors text-sm">
           <ArrowLeft className="w-4 h-4 mr-1" /> Regresar

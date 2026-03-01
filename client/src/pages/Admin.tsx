@@ -140,7 +140,7 @@ interface DashboardStats {
   pendingOrders: number;
   weeklyOrders: number;
   averageOrderValue: number;
-  topProducts: { name: string; count: number; revenue: number }[];
+  topProducts: { name: string; totalSold: number; revenue: number }[];
   recentOrders: any[];
   revenueByCategory: { category: string; revenue: number }[];
 }
@@ -467,6 +467,12 @@ function ProductsTab({ user }: { user: AdminUser }) {
           <div key={p.id} onClick={() => openEdit(p)} className="group bg-white rounded-xl border border-slate-200 overflow-hidden cursor-pointer hover:shadow-lg hover:shadow-slate-200/50 hover:border-slate-300 transition-all duration-200">
             <div className="h-28 sm:h-40 bg-slate-100 relative overflow-hidden">
               <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1495147466023-ac5c588e2e94?auto=format&fit=crop&q=80&w=400"; }} />
+              {/* Warning badge for ephemeral local uploads */}
+              {p.imageUrl.startsWith("/uploads/") && (
+                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-400 text-white shadow-sm" title="Imagen local — se perderá al reiniciar Render. Re-sube la imagen.">
+                  \u26a0 Local
+                </div>
+              )}
               <div className="absolute top-1.5 right-1.5 sm:top-2.5 sm:right-2.5">
                 <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-white/90 backdrop-blur-sm text-slate-700 shadow-sm">
                   <Tag className="w-3 h-3" />{p.category}
@@ -477,7 +483,11 @@ function ProductsTab({ user }: { user: AdminUser }) {
               <h3 className="font-semibold text-xs sm:text-sm text-slate-800 truncate">{p.name}</h3>
               <div className="flex items-center justify-between mt-1 sm:mt-2">
                 <span className="text-rose-600 font-bold text-sm sm:text-base">${p.price}</span>
-                <span className="text-[10px] sm:text-[11px] text-slate-400 font-mono">#{p.id}</span>
+                <span className={`text-[10px] sm:text-[11px] font-mono px-1.5 py-0.5 rounded ${
+                  p.stock === 0 ? "bg-red-100 text-red-600" :
+                  p.stock <= 3 ? "bg-amber-100 text-amber-700" :
+                  "bg-slate-100 text-slate-500"
+                }`}>{p.stock === 0 ? "Agotado" : `${p.stock} en stock`}</span>
               </div>
             </div>
           </div>
@@ -923,17 +933,30 @@ function UsersTab() {
 
 // DASHBOARD TAB
 function DashboardTab() {
-  const { data: stats, isLoading } = useQuery<DashboardStats>({
+  const { data: stats, isLoading, isError } = useQuery<DashboardStats>({
     queryKey: ["/api/admin/dashboard"],
     queryFn: () => apiFetch("/api/admin/dashboard"),
     refetchInterval: 60_000,
+    retry: 1,
   });
 
-  if (isLoading || !stats) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin text-rose-400 mr-3" />
         <span className="text-slate-400">Cargando estadisticas...</span>
+      </div>
+    );
+  }
+
+  if (isError || !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center">
+          <DollarSign className="w-6 h-6 text-red-400" />
+        </div>
+        <p className="text-slate-500 font-medium">Error cargando el dashboard</p>
+        <p className="text-slate-400 text-sm">Verifica que haya pedidos registrados y que la conexión sea estable.</p>
       </div>
     );
   }
@@ -1206,7 +1229,14 @@ function OrdersTab() {
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) =>
       apiFetch(`/api/admin/orders/${id}/status`, { method: "PUT", body: JSON.stringify({ status }) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] }); toast({ title: "Estado actualizado" }); },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] });
+      toast({ title: "Estado actualizado" });
+      // Auto-open printable ticket when order is confirmed
+      if (variables.status === "confirmed") {
+        window.open(`/api/admin/orders/${variables.id}/ticket`, "_blank");
+      }
+    },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
