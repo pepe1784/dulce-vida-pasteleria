@@ -48,7 +48,7 @@ export function CartDrawer() {
               <AnimatePresence>
                 {items.map((item) => (
                   <motion.div
-                    key={item.id}
+                    key={item.cartKey}
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
@@ -66,6 +66,16 @@ export function CartDrawer() {
                         <h4 className="font-display font-medium text-lg leading-tight">
                           {item.name}
                         </h4>
+                        {item.variantLabel && (
+                          <span className="text-xs text-primary/70 font-medium bg-primary/8 px-1.5 py-0.5 rounded-full mt-0.5 inline-block">
+                            {item.variantLabel}
+                          </span>
+                        )}
+                        {item.comment && (
+                          <p className="text-xs text-slate-400 mt-0.5 italic line-clamp-1">
+                            📝 {item.comment}
+                          </p>
+                        )}
                         <p className="text-sm text-muted-foreground mt-1">
                           ${Number(item.price).toFixed(2)}
                         </p>
@@ -73,7 +83,7 @@ export function CartDrawer() {
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center border rounded-full">
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.cartKey, item.quantity - 1)}
                             className="p-1 hover:bg-muted rounded-full transition-colors"
                           >
                             <Minus className="h-3 w-3" />
@@ -82,14 +92,14 @@ export function CartDrawer() {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => updateQuantity(item.id, Math.min(item.quantity + 1, item.stock))}
+                            onClick={() => updateQuantity(item.cartKey, item.quantity + 1)}
                             className="p-1 hover:bg-muted rounded-full transition-colors"
                           >
                             <Plus className="h-3 w-3" />
                           </button>
                         </div>
                         <button
-                          onClick={() => removeItem(item.id)}
+                          onClick={() => removeItem(item.cartKey)}
                           className="text-muted-foreground hover:text-destructive transition-colors"
                         >
                           <Trash2 className="h-4 w-4" />

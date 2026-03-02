@@ -125,6 +125,23 @@ export function initializeSqlite(dbPath: string = "./dev.db") {
     db.exec(`ALTER TABLE orders ADD COLUMN customer_google_id TEXT;`);
   } catch {}
 
+  // Variant info on order_items
+  try { db.exec(`ALTER TABLE order_items ADD COLUMN variant_label TEXT;`); } catch {}
+  try { db.exec(`ALTER TABLE order_items ADD COLUMN item_comment TEXT;`); } catch {}
+
+  // Product variants table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS product_variants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      price TEXT NOT NULL,
+      stock INTEGER NOT NULL DEFAULT 50,
+      image_url TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
   console.log("✅ Tablas SQLite inicializadas correctamente");
   return db;
 }

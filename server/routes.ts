@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import type { InsertOrderItem } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -33,6 +34,20 @@ export async function registerRoutes(
     res.json(categories);
   });
 
+  // ── Variantes públicas ──
+  app.get("/api/products/:id/variants", async (req, res) => {
+    const variants = await storage.getVariants(Number(req.params.id));
+    res.json(variants);
+  });
+
+  // ── Variantes batch (múltiples productos) ──
+  app.post("/api/products/variants-batch", async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids)) return res.status(400).json({ message: "ids array required" });
+    const result = await storage.getVariantsBatch(ids.map(Number));
+    res.json(result);
+  });
+
   // ── Crear pedido público (desde checkout) ──
   app.post("/api/orders", async (req, res) => {
     try {
@@ -43,7 +58,7 @@ export async function registerRoutes(
       }
 
       // Validate and resolve prices from DB (never trust client prices)
-      const resolvedItems: Array<{ productId: number; quantity: number; price: string; productName: string }> = [];
+      const resolvedItems: Array<InsertOrderItem & { variantId?: number | null }> = [];
       let subtotal = 0;
 
       for (const item of items) {
@@ -52,19 +67,42 @@ export async function registerRoutes(
           return res.status(400).json({ message: `Producto #${item.productId} no encontrado` });
         }
         const qty = Math.max(1, Math.min(99, parseInt(item.quantity) || 1));
-        // Stock validation — can't order more than available
-        if (product.stock < qty) {
-          return res.status(400).json({
-            message: `Stock insuficiente para "${product.name}". Disponible: ${product.stock} unidad${product.stock !== 1 ? "es" : ""}.`,
-          });
+
+        // Resolve price & stock from variant if provided
+        let price: number;
+        let variantLabel: string | null = null;
+        if (item.variantId) {
+          const variant = await storage.getVariant(Number(item.variantId));
+          if (!variant || variant.productId !== product.id) {
+            return res.status(400).json({ message: `Variante no válida para "${product.name}"` });
+          }
+          if (variant.stock < qty) {
+            return res.status(400).json({
+              message: `Stock insuficiente para "${product.name} — ${variant.label}". Disponible: ${variant.stock}.`,
+            });
+          }
+          price = parseFloat(String(variant.price));
+          variantLabel = variant.label;
+          // Decrement variant stock later
+        } else {
+          // Stock validation — can't order more than available
+          if (product.stock < qty) {
+            return res.status(400).json({
+              message: `Stock insuficiente para "${product.name}". Disponible: ${product.stock} unidad${product.stock !== 1 ? "es" : ""}.`,
+            });
+          }
+          price = parseFloat(String(product.price));
         }
-        const price = parseFloat(String(product.price));
+
         subtotal += price * qty;
         resolvedItems.push({
           productId: product.id,
           quantity: qty,
           price: price.toFixed(2),
           productName: product.name,
+          variantLabel,
+          variantId: item.variantId ? Number(item.variantId) : null,
+          itemComment: item.comment ? String(item.comment).slice(0, 300) : null,
         });
       }
 
@@ -91,9 +129,15 @@ export async function registerRoutes(
 
       // Decrement stock for each item
       for (const ri of resolvedItems) {
-        const current = await storage.getProduct(ri.productId);
-        if (current) {
-          await storage.updateProduct(ri.productId, { stock: Math.max(0, current.stock - ri.quantity) });
+        if ((ri as any).variantId) {
+          // Decrement variant stock
+          const v = await storage.getVariant((ri as any).variantId);
+          if (v) await storage.updateVariant(v.id, { stock: Math.max(0, v.stock - ri.quantity) });
+        } else {
+          const current = await storage.getProduct(ri.productId);
+          if (current) {
+            await storage.updateProduct(ri.productId, { stock: Math.max(0, current.stock - ri.quantity) });
+          }
         }
       }
 

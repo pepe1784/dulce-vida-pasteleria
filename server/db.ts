@@ -168,7 +168,23 @@ if (isMySQL) {
           -- Drop NOT NULL on legacy columns that the current app doesn't supply
           BEGIN ALTER TABLE orders ALTER COLUMN user_id DROP NOT NULL; EXCEPTION WHEN undefined_column THEN NULL; END;
           BEGIN ALTER TABLE orders ALTER COLUMN user_id SET DEFAULT NULL; EXCEPTION WHEN undefined_column THEN NULL; END;
+          -- order_items: variant info columns
+          BEGIN ALTER TABLE order_items ADD COLUMN variant_label TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          BEGIN ALTER TABLE order_items ADD COLUMN item_comment TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         END $$;
+      `);
+      // Product variants table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS product_variants (
+          id SERIAL PRIMARY KEY,
+          product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          label TEXT NOT NULL,
+          price VARCHAR(20) NOT NULL,
+          stock INT NOT NULL DEFAULT 50,
+          image_url TEXT,
+          sort_order INT NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
       `);
       console.log("✅ Tablas PostgreSQL inicializadas correctamente");
       console.log("✅ Conectado a PostgreSQL");

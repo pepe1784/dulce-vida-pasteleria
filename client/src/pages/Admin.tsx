@@ -183,12 +183,133 @@ const labelClass = "block text-sm font-medium text-slate-700 mb-1.5";
 
 const DEFAULT_CATEGORIES = [
   "Postres Grandes",
-  "Postres Individuales",
-  "Cajas de Roles",
+  "Pasteles Individuales",
+  "Roles",
+  "Postres Frios",
+  "Cuchareables",
+  "Fresas con Crema",
+  "Pay de Queso",
   "Bebidas Calientes",
-  "Lattes Fr\u00edos",
-  "Bebidas Fr\u00edas",
+  "Bebidas Frias",
+  "Frappes",
 ];
+
+// ─── Variant row type (used in admin editor) ───────────────────────────────
+interface VariantRow {
+  id?: number;
+  label: string;
+  price: string;
+  stock: string;
+  imageUrl: string;
+}
+
+// ─── Variant Editor Component ─────────────────────────────────────────────
+function VariantEditor({ variants, onChange, productImageUrl }: {
+  variants: VariantRow[];
+  onChange: (v: VariantRow[]) => void;
+  productImageUrl?: string;
+}) {
+  const fileRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+
+  function addVariant() {
+    onChange([...variants, { label: "", price: "", stock: "50", imageUrl: productImageUrl || "" }]);
+  }
+
+  function removeVariant(i: number) {
+    onChange(variants.filter((_, idx) => idx !== i));
+  }
+
+  function update(i: number, field: keyof VariantRow, value: string) {
+    onChange(variants.map((v, idx) => idx === i ? { ...v, [field]: value } : v));
+  }
+
+  async function handleVariantImage(e: React.ChangeEvent<HTMLInputElement>, i: number) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingIdx(i);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = reader.result as string;
+        const result = await apiFetch("/api/admin/upload", { method: "POST", body: JSON.stringify({ data, filename: file.name }) });
+        update(i, "imageUrl", result.url);
+      } finally {
+        setUploadingIdx(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className={labelClass + " mb-0"}>Variantes (opciones del producto)</label>
+        <button type="button" onClick={addVariant} className="text-xs text-rose-500 hover:text-rose-700 font-medium flex items-center gap-1">
+          <Plus className="w-3 h-3" /> Agregar variante
+        </button>
+      </div>
+      {variants.length === 0 && (
+        <p className="text-xs text-slate-400 bg-slate-50 rounded-lg p-3 border border-dashed border-slate-200">
+          Sin variantes — el precio y stock del producto aplican directamente.<br/>
+          Agrega variantes para ofrecer opciones como "Chico / Grande" con precios diferentes.
+        </p>
+      )}
+      {variants.map((v, i) => (
+        <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-2">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Etiqueta (ej: Chico, Grande, Con frutos rojos)"
+              value={v.label}
+              onChange={(e) => update(i, "label", e.target.value)}
+              className="flex-1 bg-white border-slate-200 text-xs h-8"
+            />
+            <button type="button" onClick={() => removeVariant(i)} className="text-slate-400 hover:text-red-500 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Precio"
+                value={v.price}
+                onChange={(e) => update(i, "price", e.target.value)}
+                className="pl-6 bg-white border-slate-200 text-xs h-8"
+              />
+            </div>
+            <div className="relative flex-1">
+              <Input
+                type="number"
+                placeholder="Stock"
+                value={v.stock}
+                onChange={(e) => update(i, "stock", e.target.value)}
+                className="bg-white border-slate-200 text-xs h-8"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 items-center">
+            {v.imageUrl && (
+              <img src={v.imageUrl} alt={v.label} className="w-10 h-10 rounded object-cover border border-slate-200 flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            )}
+            <input type="file" accept="image/*" className="hidden" ref={(el) => { fileRefs.current[i] = el; }} onChange={(e) => handleVariantImage(e, i)} />
+            <button type="button" onClick={() => fileRefs.current[i]?.click()} className="text-xs text-slate-500 hover:text-rose-500 border border-dashed border-slate-300 rounded px-2 py-1 flex items-center gap-1">
+              {uploadingIdx === i ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+              {v.imageUrl ? "Cambiar imagen" : "Imagen (opcional)"}
+            </button>
+            {v.imageUrl && (
+              <button type="button" onClick={() => update(i, "imageUrl", "")} className="text-xs text-red-400 hover:text-red-600">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // LOGIN COMPONENT
 function AdminLogin({ onLogin }: { onLogin: (user: AdminUser) => void }) {
@@ -343,6 +464,8 @@ function ProductsTab({ user }: { user: AdminUser }) {
   const [form, setForm] = useState({ name: "", description: "", price: "", stock: 50, category: "", imageUrl: "" });
   const [imagePreview, setImagePreview] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [savingVariants, setSavingVariants] = useState(false);
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ["/api/admin/products"],
@@ -378,6 +501,10 @@ function ProductsTab({ user }: { user: AdminUser }) {
     setEditProduct(product);
     setForm({ name: product.name, description: product.description, price: product.price, stock: product.stock, category: product.category, imageUrl: product.imageUrl });
     setImagePreview(product.imageUrl);
+    // Load existing variants
+    apiFetch(`/api/admin/products/${product.id}/variants`).then((v: any[]) => {
+      setVariants(v.map((x) => ({ id: x.id, label: x.label, price: x.price, stock: String(x.stock), imageUrl: x.imageUrl || "" })));
+    }).catch(() => setVariants([]));
   }
 
   function openNew() {
@@ -385,6 +512,7 @@ function ProductsTab({ user }: { user: AdminUser }) {
     setEditProduct({ id: 0 } as Product);
     setForm({ name: "", description: "", price: "", stock: 50, category: "Postres Grandes", imageUrl: "" });
     setImagePreview("");
+    setVariants([]);
   }
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -406,8 +534,36 @@ function ProductsTab({ user }: { user: AdminUser }) {
     }
   }
 
-  function handleSave() {
-    saveMutation.mutate({ id: isNew ? undefined : editProduct?.id, body: form });
+  async function handleSave() {
+    const savedProduct = await new Promise<any>((resolve, reject) => {
+      saveMutation.mutate(
+        { id: isNew ? undefined : editProduct?.id, body: form },
+        { onSuccess: resolve, onError: reject }
+      );
+    }).catch(() => null);
+    // If we have variants and a product id, save them too
+    const productId = savedProduct?.id ?? editProduct?.id;
+    if (productId && variants.length > 0) {
+      setSavingVariants(true);
+      try {
+        await apiFetch(`/api/admin/products/${productId}/variants`, {
+          method: "PUT",
+          body: JSON.stringify({ variants: variants.map((v) => ({ ...v, stock: parseInt(v.stock) || 50 })) }),
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      } catch (e: any) {
+        toast({ title: "Error guardando variantes", description: e.message, variant: "destructive" });
+      } finally {
+        setSavingVariants(false);
+      }
+    } else if (productId && variants.length === 0 && !isNew) {
+      // Clear all variants if the array is empty
+      await apiFetch(`/api/admin/products/${productId}/variants`, {
+        method: "PUT",
+        body: JSON.stringify({ variants: [] }),
+      }).catch(() => {});
+    }
   }
 
   const canEditText = user.role === "admin" || user.role === "editor" || user.role === "owner";
@@ -551,12 +707,15 @@ function ProductsTab({ user }: { user: AdminUser }) {
             )}
             {(user.role === "admin" || user.role === "owner") && (
               <div>
-                <label className={labelClass}>Stock</label>
+                <label className={labelClass}>Stock (general, si no usa variantes)</label>
                 <div className="relative">
                   <Boxes className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <Input type="number" value={form.stock} onChange={(e) => setForm(f => ({ ...f, stock: parseInt(e.target.value) || 0 }))} className="pl-10 bg-slate-50/50 border-slate-200" />
                 </div>
               </div>
+            )}
+            {canEditText && (
+              <VariantEditor variants={variants} onChange={setVariants} productImageUrl={form.imageUrl} />
             )}
           </div>
           <DialogFooter className="gap-2 pt-4 border-t border-slate-100 flex-col-reverse sm:flex-row">

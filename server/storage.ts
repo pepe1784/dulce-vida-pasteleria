@@ -1,7 +1,7 @@
 import { dbRef, dbType, dbReady } from "./db";
 import type {
   Product, InsertProduct, Order, InsertOrder, OrderItem, InsertOrderItem,
-  AdminUser, OrderWithItems,
+  AdminUser, OrderWithItems, ProductVariant, InsertProductVariant,
 } from "@shared/schema";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -183,7 +183,77 @@ export class DatabaseStorage {
     return (r.changes ?? 0) > 0;
   }
 
-  // ── Categories ────────────────────────────────────────────────────────────
+  // ── Product Variants ──────────────────────────────────────────────────────
+  async getVariants(productId: number): Promise<ProductVariant[]> {
+    const rows = await rawQuery(
+      "SELECT id, product_id AS productId, label, price, stock, image_url AS imageUrl, sort_order AS sortOrder FROM product_variants WHERE product_id = ? ORDER BY sort_order ASC, id ASC",
+      [productId]
+    );
+    return rows as ProductVariant[];
+  }
+
+  async getVariant(id: number): Promise<ProductVariant | undefined> {
+    const rows = await rawQuery(
+      "SELECT id, product_id AS productId, label, price, stock, image_url AS imageUrl, sort_order AS sortOrder FROM product_variants WHERE id = ?",
+      [id]
+    );
+    return rows[0] as ProductVariant | undefined;
+  }
+
+  async createVariant(data: InsertProductVariant): Promise<ProductVariant> {
+    const r = await rawRun(
+      "INSERT INTO product_variants (product_id, label, price, stock, image_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+      [data.productId, data.label, String(data.price), data.stock ?? 50, data.imageUrl ?? null, data.sortOrder ?? 0]
+    );
+    return (await this.getVariant(r.lastInsertId!))!;
+  }
+
+  async updateVariant(id: number, data: Partial<InsertProductVariant>): Promise<ProductVariant | undefined> {
+    const fields: string[] = [];
+    const vals: any[] = [];
+    if (data.label !== undefined) { fields.push("label = ?"); vals.push(data.label); }
+    if (data.price !== undefined) { fields.push("price = ?"); vals.push(String(data.price)); }
+    if (data.stock !== undefined) { fields.push("stock = ?"); vals.push(data.stock); }
+    if (data.imageUrl !== undefined) { fields.push("image_url = ?"); vals.push(data.imageUrl); }
+    if (data.sortOrder !== undefined) { fields.push("sort_order = ?"); vals.push(data.sortOrder); }
+    if (!fields.length) return this.getVariant(id);
+    vals.push(id);
+    await rawRun(`UPDATE product_variants SET ${fields.join(", ")} WHERE id = ?`, vals);
+    return this.getVariant(id);
+  }
+
+  async deleteVariant(id: number): Promise<boolean> {
+    const r = await rawRun("DELETE FROM product_variants WHERE id = ?", [id]);
+    return (r.changes ?? 0) > 0;
+  }
+
+  async replaceVariants(productId: number, variants: Array<{ label: string; price: string; stock: number; imageUrl?: string | null; sortOrder?: number }>): Promise<ProductVariant[]> {
+    await rawRun("DELETE FROM product_variants WHERE product_id = ?", [productId]);
+    for (let i = 0; i < variants.length; i++) {
+      const v = variants[i];
+      await rawRun(
+        "INSERT INTO product_variants (product_id, label, price, stock, image_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+        [productId, v.label, String(v.price), v.stock ?? 50, v.imageUrl ?? null, v.sortOrder ?? i]
+      );
+    }
+    return this.getVariants(productId);
+  }
+
+  // Get all variants for multiple product IDs in one query
+  async getVariantsBatch(productIds: number[]): Promise<Record<number, ProductVariant[]>> {
+    if (!productIds.length) return {};
+    const placeholders = productIds.map(() => "?").join(",");
+    const rows = await rawQuery(
+      `SELECT id, product_id AS productId, label, price, stock, image_url AS imageUrl, sort_order AS sortOrder FROM product_variants WHERE product_id IN (${placeholders}) ORDER BY product_id, sort_order ASC, id ASC`,
+      productIds
+    );
+    const result: Record<number, ProductVariant[]> = {};
+    for (const r of rows as ProductVariant[]) {
+      if (!result[r.productId]) result[r.productId] = [];
+      result[r.productId].push(r);
+    }
+    return result;
+  }
   async getCategories(): Promise<string[]> {
     const rows = await rawQuery("SELECT DISTINCT category FROM products ORDER BY category ASC");
     return rows.map((r: any) => r.category as string);
@@ -218,8 +288,8 @@ export class DatabaseStorage {
     const orderId = r.lastInsertId!;
     for (const item of items) {
       await rawRun(
-        "INSERT INTO order_items (order_id, product_id, product_name, quantity, price) VALUES (?, ?, ?, ?, ?)",
-        [orderId, item.productId, item.productName, item.quantity, String(item.price)]
+        "INSERT INTO order_items (order_id, product_id, product_name, quantity, price, variant_label, item_comment) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [orderId, item.productId, item.productName, item.quantity, String(item.price), item.variantLabel ?? null, item.itemComment ?? null]
       );
     }
     return (await this.getOrder(orderId))!;
@@ -250,10 +320,10 @@ export class DatabaseStorage {
     if (!order) return undefined;
     const items = await rawQuery(
       `SELECT id, order_id AS orderId, product_id AS productId, product_name AS productName,
-        quantity, price FROM order_items WHERE order_id = ?`,
+        quantity, price, variant_label AS variantLabel, item_comment AS itemComment FROM order_items WHERE order_id = ?`,
       [id]
     );
-    return { ...order, items: items as OrderItem[] };
+    return { ...order, items: items as any[] };
   }
 
   async getAllOrdersWithItems(): Promise<OrderWithItems[]> {
@@ -262,10 +332,10 @@ export class DatabaseStorage {
     for (const order of orders) {
       const items = await rawQuery(
         `SELECT id, order_id AS orderId, product_id AS productId, product_name AS productName,
-          quantity, price FROM order_items WHERE order_id = ?`,
+          quantity, price, variant_label AS variantLabel, item_comment AS itemComment FROM order_items WHERE order_id = ?`,
         [order.id]
       );
-      result.push({ ...order, items: items as OrderItem[] });
+      result.push({ ...order, items: items as any[] });
     }
     return result;
   }

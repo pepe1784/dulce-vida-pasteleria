@@ -74,7 +74,7 @@ export type AdminUser = typeof adminUsers.$inferSelect;
 export type SiteSetting = typeof siteSettings.$inferSelect;
 
 export type InsertOrder = {
-  orderNumber: string;
+  orderNumber?: string;
   customerName: string;
   customerPhone: string;
   orderType: string;
@@ -85,16 +85,33 @@ export type InsertOrder = {
   deliveryCost?: string | null;
   total: string;
   notes?: string | null;
+  status?: string | null;
 };
 
 export type InsertOrderItem = {
-  orderId: number;
+  orderId?: number;
   productId: number;
   productName: string;
   quantity: number;
   price: string;
+  variantId?: number | null;
+  variantLabel?: string | null;
+  itemComment?: string | null;
 };
 
 export type OrderWithItems = Order & {
-  items: OrderItem[];
+  items: (OrderItem & { variantLabel?: string | null; itemComment?: string | null })[];
 };
+
+// ── Product Variant ───────────────────────────────────────────────────────
+export type ProductVariant = {
+  id: number;
+  productId: number;
+  label: string;
+  price: string;
+  stock: number;
+  imageUrl?: string | null;
+  sortOrder: number;
+};
+
+export type InsertProductVariant = Omit<ProductVariant, "id">;

@@ -227,6 +227,33 @@ export function registerAdminRoutes(app: Express) {
     return res.json({ ok: true });
   });
 
+  // ══════ PRODUCT VARIANTS ══════
+  app.get("/api/admin/products/:id/variants", requireAdmin, async (req: Request, res: Response) => {
+    return res.json(await storage.getVariants(Number(req.params.id)));
+  });
+
+  // Replace all variants for a product at once (simpler than individual CRUD)
+  app.put("/api/admin/products/:id/variants", requireRole("admin", "editor"), async (req: Request, res: Response) => {
+    try {
+      const productId = Number(req.params.id);
+      const product = await storage.getProduct(productId);
+      if (!product) return res.status(404).json({ message: "Producto no encontrado" });
+      const { variants } = req.body; // array of { label, price, stock, imageUrl?, sortOrder? }
+      if (!Array.isArray(variants)) return res.status(400).json({ message: "variants array required" });
+      const sanitized = variants.map((v: any, i: number) => ({
+        label: sanitize(v.label || ""),
+        price: parseFloat(String(v.price || 0)).toFixed(2),
+        stock: Math.max(0, Math.min(9999, parseInt(v.stock) || 50)),
+        imageUrl: v.imageUrl ? sanitize(v.imageUrl) : null,
+        sortOrder: i,
+      })).filter((v) => v.label);
+      const result = await storage.replaceVariants(productId, sanitized);
+      return res.json(result);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
   // â•â•â•â•â•â• CATEGORIES â•â•â•â•â•â•
   app.get("/api/admin/categories", requireAdmin, async (_req, res) => {
     return res.json(await storage.getCategories());
@@ -343,7 +370,11 @@ export function registerAdminRoutes(app: Express) {
 
       const itemsHtml = (order.items || []).map((item: any) => `
         <tr>
-          <td>${item.productName || "Producto"}</td>
+          <td>
+            ${item.productName || "Producto"}
+            ${item.variantLabel ? `<br><span style="font-size:9px;color:#555">${item.variantLabel}</span>` : ""}
+            ${item.itemComment ? `<br><span style="font-size:9px;color:#666;font-style:italic">Nota: ${item.itemComment}</span>` : ""}
+          </td>
           <td style="text-align:center">${item.quantity}</td>
           <td style="text-align:right">$${Number(item.price).toFixed(2)}</td>
           <td style="text-align:right">$${(Number(item.price) * item.quantity).toFixed(2)}</td>

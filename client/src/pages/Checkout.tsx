@@ -114,7 +114,12 @@ export default function Checkout() {
           paymentMethod,
           cashAmount: paymentMethod === "cash" ? cashAmount : null,
           deliveryAddress: orderType === "delivery" ? address : null,
-          items: items.map((i) => ({ productId: i.id, quantity: i.quantity })),
+          items: items.map((i) => ({
+            productId: i.id,
+            quantity: i.quantity,
+            variantId: i.variantId,
+            comment: i.comment,
+          })),
           notes: "",
         }),
       });
@@ -152,7 +157,13 @@ export default function Checkout() {
       card: "Tarjeta (en sucursal)",
     };
     const itemsText = items
-      .map((i) => `  • ${i.quantity}x ${i.name}  $${(Number(i.price) * i.quantity).toFixed(2)}`)
+      .map((i) => {
+        let line = `  • ${i.quantity}x ${i.name}`;
+        if (i.variantLabel) line += ` (${i.variantLabel})`;
+        line += `  $${(Number(i.price) * i.quantity).toFixed(2)}`;
+        if (i.comment) line += `\n    📝 ${i.comment}`;
+        return line;
+      })
       .join("\n");
     const addrLines = orderType === "delivery"
       ? [
