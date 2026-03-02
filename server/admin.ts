@@ -63,10 +63,13 @@ async function uploadImage(base64Data: string, filename: string): Promise<string
 
   if (cloudName && apiKey && apiSecret) {
     try {
-      // Use Cloudinary REST API directly (no SDK needed)
+      // Cloudinary REST API upload
+      // Signature = SHA1 of all non-file params (sorted alphabetically) + apiSecret
       const timestamp = Math.round(Date.now() / 1000);
+      const folder = "dulce-vida";
       const crypto = await import("crypto");
-      const sigString = `timestamp=${timestamp}${apiSecret}`;
+      // Must include ALL params in signature string, sorted alphabetically
+      const sigString = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
       const signature = crypto.createHash("sha1").update(sigString).digest("hex");
 
       const formData = new URLSearchParams();
@@ -74,10 +77,8 @@ async function uploadImage(base64Data: string, filename: string): Promise<string
       formData.append("timestamp", String(timestamp));
       formData.append("api_key", apiKey);
       formData.append("signature", signature);
-      formData.append("folder", "endulzarte");
+      formData.append("folder", folder);
 
-      const fetch = (await import("node:http")).request; // use native http
-      // Use the global fetch if available (Node 18+)
       const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
       const resp = await globalThis.fetch(uploadUrl, {
         method: "POST",
@@ -86,7 +87,11 @@ async function uploadImage(base64Data: string, filename: string): Promise<string
       });
       if (resp.ok) {
         const data = await resp.json() as any;
+        console.log("✅ Cloudinary upload OK:", data.secure_url);
         return data.secure_url;
+      } else {
+        const errText = await resp.text();
+        console.warn("Cloudinary upload HTTP error:", resp.status, errText);
       }
     } catch (e) {
       console.warn("Cloudinary upload failed, falling back to local:", e);
@@ -94,6 +99,7 @@ async function uploadImage(base64Data: string, filename: string): Promise<string
   }
 
   // Local fallback
+  console.warn("⚠️  Usando almacenamiento local (Cloudinary no configurado o falló)");
   const uploadsDir = path.join(process.cwd(), "uploads");
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
