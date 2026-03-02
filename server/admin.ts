@@ -259,6 +259,17 @@ export function registerAdminRoutes(app: Express) {
     return res.json(await storage.getCategories());
   });
 
+  app.post("/api/admin/categories", requireRole("admin", "editor"), async (req: Request, res: Response) => {
+    try {
+      const name = sanitize(String(req.body.name || "")).trim();
+      if (!name) return res.status(400).json({ message: "Nombre de categoría requerido" });
+      await storage.addCategory(name);
+      return res.json({ name });
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
   app.put("/api/admin/categories/rename", requireRole("admin", "editor"), async (req: Request, res: Response) => {
     try {
       const { oldName, newName } = req.body;
@@ -273,7 +284,7 @@ export function registerAdminRoutes(app: Express) {
   app.delete("/api/admin/categories/:name", requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const name = decodeURIComponent(String(req.params.name));
-      const { reassignTo } = req.body;
+      const reassignTo = (req.query.reassignTo as string) || (req.body?.reassignTo as string) || undefined;
       await storage.deleteCategory(name, reassignTo ? sanitize(reassignTo) : undefined);
       return res.json({ ok: true });
     } catch (e: any) {

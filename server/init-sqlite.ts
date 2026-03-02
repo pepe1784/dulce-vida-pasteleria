@@ -142,6 +142,17 @@ export function initializeSqlite(dbPath: string = "./dev.db") {
     );
   `);
 
+  // Seed default categories if not yet set
+  const existingCatSetting = db.prepare("SELECT value FROM site_settings WHERE key = 'categories_list'").get();
+  if (!existingCatSetting) {
+    const defaultCats = JSON.stringify([
+      "Bebidas Calientes", "Bebidas Frías", "Cuchareables", "Frappes",
+      "Fresas con Crema", "Pasteles Grandes", "Pasteles Individuales",
+      "Pay de Queso", "Roles",
+    ]);
+    db.prepare("INSERT OR IGNORE INTO site_settings (key, value) VALUES ('categories_list', ?)").run(defaultCats);
+  }
+
   console.log("✅ Tablas SQLite inicializadas correctamente");
   return db;
 }

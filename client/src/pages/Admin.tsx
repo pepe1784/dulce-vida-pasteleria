@@ -181,18 +181,7 @@ async function apiFetch(url: string, options?: RequestInit) {
 
 const labelClass = "block text-sm font-medium text-slate-700 mb-1.5";
 
-const DEFAULT_CATEGORIES = [
-  "Postres Grandes",
-  "Pasteles Individuales",
-  "Roles",
-  "Postres Frios",
-  "Cuchareables",
-  "Fresas con Crema",
-  "Pay de Queso",
-  "Bebidas Calientes",
-  "Bebidas Frias",
-  "Frappes",
-];
+const DEFAULT_CATEGORIES: string[] = []; // Categories are now managed in the DB (Categories tab / site_settings)
 
 // ─── Variant row type (used in admin editor) ───────────────────────────────
 interface VariantRow {
@@ -389,12 +378,11 @@ function AdminLogin({ onLogin }: { onLogin: (user: AdminUser) => void }) {
 }
 
 // CATEGORY SELECTOR WITH CUSTOM INPUT
-function CategorySelector({ value, onChange, allProducts }: { value: string; onChange: (v: string) => void; allProducts: Product[] }) {
+function CategorySelector({ value, onChange, apiCategories }: { value: string; onChange: (v: string) => void; apiCategories: string[] }) {
   const [isCustom, setIsCustom] = useState(false);
   const [customValue, setCustomValue] = useState("");
 
-  const existingCategories = Array.from(new Set(allProducts.map((p) => p.category)));
-  const allCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...existingCategories])).sort();
+  const allCategories = apiCategories.filter(Boolean).sort();
 
   const isCurrentCustom = value && !allCategories.includes(value);
 
@@ -470,6 +458,11 @@ function ProductsTab({ user }: { user: AdminUser }) {
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ["/api/admin/products"],
     queryFn: () => apiFetch("/api/admin/products"),
+  });
+
+  const { data: apiCategories = [] } = useQuery<string[]>({
+    queryKey: ["/api/admin/categories"],
+    queryFn: () => apiFetch("/api/admin/categories"),
   });
 
   const saveMutation = useMutation({
@@ -568,7 +561,7 @@ function ProductsTab({ user }: { user: AdminUser }) {
 
   const canEditText = user.role === "admin" || user.role === "editor" || user.role === "owner";
   const canDelete = user.role === "admin" || user.role === "owner";
-  const allProductCategories = Array.from(new Set([...DEFAULT_CATEGORIES, ...products.map((p) => p.category)]));
+  const allProductCategories = Array.from(new Set([...apiCategories, ...products.map((p) => p.category)])).filter(Boolean).sort();
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase());
@@ -701,7 +694,7 @@ function ProductsTab({ user }: { user: AdminUser }) {
                 </div>
                 <div>
                   <label className={labelClass}>Categoria</label>
-                  <CategorySelector value={form.category} onChange={(v) => setForm(f => ({ ...f, category: v }))} allProducts={products} />
+                  <CategorySelector value={form.category} onChange={(v) => setForm(f => ({ ...f, category: v }))} apiCategories={apiCategories} />
                 </div>
               </>
             )}

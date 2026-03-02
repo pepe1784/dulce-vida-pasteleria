@@ -255,19 +255,47 @@ export class DatabaseStorage {
     return result;
   }
   async getCategories(): Promise<string[]> {
-    const rows = await rawQuery("SELECT DISTINCT category FROM products ORDER BY category ASC");
-    return rows.map((r: any) => r.category as string);
+    // Primary source: categories_list setting
+    const settingVal = await this.getSetting("categories_list");
+    const fromSettings: string[] = settingVal ? JSON.parse(settingVal) : [];
+    // Secondary: any category from actual products not yet in settings
+    const rows = await rawQuery("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category ASC");
+    const fromProducts = rows.map((r: any) => r.category as string);
+    return Array.from(new Set([...fromSettings, ...fromProducts])).sort();
+  }
+
+  async addCategory(name: string): Promise<void> {
+    const settingVal = await this.getSetting("categories_list");
+    const list: string[] = settingVal ? JSON.parse(settingVal) : [];
+    if (!list.includes(name)) {
+      list.push(name);
+      list.sort();
+      await this.setSetting("categories_list", JSON.stringify(list));
+    }
   }
 
   async renameCategory(oldName: string, newName: string): Promise<void> {
     await rawRun("UPDATE products SET category = ? WHERE category = ?", [newName, oldName]);
+    // Also update settings list
+    const settingVal = await this.getSetting("categories_list");
+    if (settingVal) {
+      const list: string[] = JSON.parse(settingVal).map((c: string) => c === oldName ? newName : c);
+      await this.setSetting("categories_list", JSON.stringify(list));
+    }
   }
 
   async deleteCategory(name: string, reassignTo?: string): Promise<void> {
     if (reassignTo) {
       await rawRun("UPDATE products SET category = ? WHERE category = ?", [reassignTo, name]);
     } else {
-      await rawRun("DELETE FROM products WHERE category = ?", [name]);
+      // Only delete products if no reassign target; usually better to reassign
+      await rawRun("UPDATE products SET category = '' WHERE category = ?", [name]);
+    }
+    // Remove from settings list
+    const settingVal = await this.getSetting("categories_list");
+    if (settingVal) {
+      const list: string[] = JSON.parse(settingVal).filter((c: string) => c !== name);
+      await this.setSetting("categories_list", JSON.stringify(list));
     }
   }
 

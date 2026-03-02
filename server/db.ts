@@ -186,6 +186,12 @@ if (isMySQL) {
         );
         CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
       `);
+      // Seed default categories if not yet set
+      await client.query(`
+        INSERT INTO site_settings (key, value)
+        VALUES ('categories_list', '["Bebidas Calientes","Bebidas Frías","Cuchareables","Frappes","Fresas con Crema","Pasteles Grandes","Pasteles Individuales","Pay de Queso","Roles"]')
+        ON CONFLICT (key) DO NOTHING;
+      `);
       console.log("✅ Tablas PostgreSQL inicializadas correctamente");
       console.log("✅ Conectado a PostgreSQL");
     } finally {
