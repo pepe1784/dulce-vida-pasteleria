@@ -103,10 +103,10 @@ async function rawRun(sql: string, params: any[] = []): Promise<{ lastInsertId?:
       const [result] = await client.execute(sql, params);
       return { lastInsertId: (result as any).insertId, changes: (result as any).affectedRows };
     } else if (client && typeof client.query === "function") {
-      // pg pool — use $1,$2,... and RETURNING id for INSERTs
+      // pg pool — use $1,$2,... and RETURNING * for INSERTs to capture generated id
       let pgSql = toPgSql(sql);
       const isInsert = /^\s*INSERT/i.test(pgSql);
-      if (isInsert && !/RETURNING/i.test(pgSql)) pgSql += " RETURNING id";
+      if (isInsert && !/RETURNING/i.test(pgSql)) pgSql += " RETURNING *";
       const res = await client.query(pgSql, params.length ? params : undefined);
       const lastInsertId = isInsert ? (res.rows[0]?.id ?? undefined) : undefined;
       return { lastInsertId, changes: res.rowCount ?? 0 };
