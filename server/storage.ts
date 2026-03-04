@@ -46,6 +46,16 @@ const PG_ALIAS_MAP: Record<string, string> = {
   preferredaddress: "preferredAddress",
   customergoogleid: "customerGoogleId",
   totalsold: "totalSold",
+  variantlabel: "variantLabel",
+  itemcomment: "itemComment",
+  sortorder: "sortOrder",
+  acceptedby: "acceptedBy",
+  adminid: "adminId",
+  adminname: "adminName",
+  adminrole: "adminRole",
+  oldstatus: "oldStatus",
+  newstatus: "newStatus",
+  ipaddress: "ipAddress",
 };
 
 function normalizePgRow(row: Record<string, any>): Record<string, any> {
@@ -328,7 +338,8 @@ export class DatabaseStorage {
       `SELECT id, order_number AS orderNumber, customer_name AS customerName,
         customer_phone AS customerPhone, order_type AS orderType, payment_method AS paymentMethod,
         cash_amount AS cashAmount, delivery_address AS deliveryAddress, subtotal, delivery_cost AS deliveryCost,
-        total, status, notes, created_at AS createdAt FROM orders WHERE id = ?`,
+        total, status, notes, created_at AS createdAt, customer_google_id AS customerGoogleId
+       FROM orders WHERE id = ?`,
       [id]
     );
     return rows[0] as Order | undefined;
@@ -368,9 +379,96 @@ export class DatabaseStorage {
     return result;
   }
 
-  async updateOrderStatus(id: number, status: string): Promise<Order | undefined> {
-    await rawRun("UPDATE orders SET status = ? WHERE id = ?", [status, id]);
+  async updateOrderStatus(id: number, status: string, acceptedBy?: number): Promise<Order | undefined> {
+    if (acceptedBy && status === "confirmed") {
+      await rawRun("UPDATE orders SET status = ?, accepted_by = ? WHERE id = ?", [status, acceptedBy, id]);
+    } else {
+      await rawRun("UPDATE orders SET status = ? WHERE id = ?", [status, id]);
+    }
     return this.getOrder(id);
+  }
+
+  // ── Audit Log (IMMUTABLE — no update/delete methods) ──────────────────────
+  async createAuditLog(entry: {
+    orderId: number;
+    adminId: number;
+    adminName: string;
+    adminRole: string;
+    oldStatus: string;
+    newStatus: string;
+    ipAddress?: string;
+  }): Promise<void> {
+    const ts = Math.floor(Date.now() / 1000);
+    await rawRun(
+      `INSERT INTO order_audit_log (order_id, admin_id, admin_name, admin_role, old_status, new_status, ip_address, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [entry.orderId, entry.adminId, entry.adminName, entry.adminRole,
+       entry.oldStatus, entry.newStatus, entry.ipAddress ?? null, ts]
+    );
+  }
+
+  async getAuditLogs(orderId: number): Promise<any[]> {
+    return rawQuery(
+      `SELECT id, order_id AS orderId, admin_id AS adminId, admin_name AS adminName,
+        admin_role AS adminRole, old_status AS oldStatus, new_status AS newStatus,
+        ip_address AS ipAddress, created_at AS createdAt
+       FROM order_audit_log WHERE order_id = ? ORDER BY id ASC`,
+      [orderId]
+    );
+  }
+
+  async getAllAuditLogs(limit = 100): Promise<any[]> {
+    return rawQuery(
+      `SELECT l.id, l.order_id AS orderId, l.admin_id AS adminId, l.admin_name AS adminName,
+        l.admin_role AS adminRole, l.old_status AS oldStatus, l.new_status AS newStatus,
+        l.ip_address AS ipAddress, l.created_at AS createdAt,
+        o.order_number AS orderNumber
+       FROM order_audit_log l
+       LEFT JOIN orders o ON l.order_id = o.id
+       ORDER BY l.id DESC LIMIT ?`,
+      [limit]
+    );
+  }
+
+  async getOrderByNumber(orderNumber: string): Promise<OrderWithItems | undefined> {    const rows = await rawQuery(
+      `SELECT id, order_number AS orderNumber, customer_name AS customerName,
+        customer_phone AS customerPhone, order_type AS orderType, payment_method AS paymentMethod,
+        cash_amount AS cashAmount, delivery_address AS deliveryAddress, subtotal, delivery_cost AS deliveryCost,
+        total, status, notes, created_at AS createdAt FROM orders WHERE order_number = ?`,
+      [orderNumber]
+    );
+    if (!rows[0]) return undefined;
+    const order = rows[0] as Order;
+    const items = await rawQuery(
+      `SELECT id, order_id AS orderId, product_id AS productId, product_name AS productName,
+        quantity, price, variant_label AS variantLabel, item_comment AS itemComment FROM order_items WHERE order_id = ?`,
+      [order.id]
+    );
+    return { ...order, items: items as any[] };
+  }
+
+  // Orders active in kitchen (confirmed / preparing / ready)
+  async getOrdersForKitchen(): Promise<OrderWithItems[]> {
+    const orders = await rawQuery(
+      `SELECT id, order_number AS orderNumber, customer_name AS customerName,
+        customer_phone AS customerPhone, order_type AS orderType, payment_method AS paymentMethod,
+        cash_amount AS cashAmount, delivery_address AS deliveryAddress, subtotal, delivery_cost AS deliveryCost,
+        total, status, notes, created_at AS createdAt
+       FROM orders
+       WHERE status IN ('confirmed','preparing','ready')
+       ORDER BY id ASC`
+    );
+    const result: OrderWithItems[] = [];
+    for (const o of orders) {
+      const items = await rawQuery(
+        `SELECT id, order_id AS orderId, product_id AS productId, product_name AS productName,
+          quantity, price, variant_label AS variantLabel, item_comment AS itemComment
+         FROM order_items WHERE order_id = ?`,
+        [o.id]
+      );
+      result.push({ ...(o as Order), items: items as any[] });
+    }
+    return result;
   }
 
   // ── Dashboard ─────────────────────────────────────────────────────────────

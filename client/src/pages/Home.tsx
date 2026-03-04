@@ -66,18 +66,18 @@ export default function Home() {
       <Navigation />
 
       {/* Hero Section */}
-      <section id="inicio" className="relative min-h-[88svh] sm:h-[90vh] flex items-center overflow-hidden">
+      <section id="inicio" className="relative min-h-screen sm:min-h-[90vh] flex items-center overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent opacity-60" />
         <div className="absolute top-1/4 -left-20 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
         
-        <div className="container-custom grid lg:grid-cols-2 gap-12 items-center">
+        <div className="container-custom grid lg:grid-cols-2 gap-12 items-center pt-24 pb-10 sm:pt-28 lg:pt-0 lg:pb-0">
           <div className="space-y-8 animate-in fade-in slide-in-from-left-10 duration-1000">
             <div className="inline-block px-4 py-1.5 rounded-full border border-primary/20 bg-white/50 backdrop-blur-sm">
                 <span className="text-sm font-medium text-primary tracking-wide uppercase">
                     Postrería Artesanal en Colima
                 </span>
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-7xl xl:text-8xl font-display leading-[1.1]">
+            <h1 className="text-[2rem] sm:text-5xl lg:text-7xl xl:text-8xl font-display leading-[1.15] sm:leading-[1.1]">
               Dulces <span className="text-primary italic font-handwriting">momentos</span>,<br />
               hechos con amor.
             </h1>

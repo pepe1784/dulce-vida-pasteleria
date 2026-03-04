@@ -1,11 +1,33 @@
 import { Navigation } from "@/components/Navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Package, Calendar, ArrowRight, ShoppingBag } from "lucide-react";
+import { Loader2, Package, Calendar, ArrowRight, ShoppingBag, Clock, CheckCircle, ChefHat, Truck, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+
+/** Parse a createdAt value that can be a PG Date object, ISO string, or Unix ts (SQLite integer) */
+function parseOrderDate(raw: any): Date {
+  if (!raw) return new Date();
+  // Already a Date
+  if (raw instanceof Date) return raw;
+  // Number: if > 1e10 it's already milliseconds, otherwise Unix seconds
+  if (typeof raw === "number") return new Date(raw > 1e10 ? raw : raw * 1000);
+  // String: ISO datetime or numeric string
+  const n = Number(raw);
+  if (!isNaN(n) && String(raw).length <= 13) return new Date(n > 1e10 ? n : n * 1000);
+  return new Date(raw);
+}
+
+const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
+  pending:   { label: "Pendiente",   icon: <Clock className="w-3 h-3" />,        cls: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  confirmed: { label: "Confirmado",  icon: <CheckCircle className="w-3 h-3" />,  cls: "bg-blue-100 text-blue-700 border-blue-200" },
+  preparing: { label: "Preparando",  icon: <ChefHat className="w-3 h-3" />,      cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  ready:     { label: "Listo",       icon: <CheckCircle className="w-3 h-3" />,  cls: "bg-green-100 text-green-700 border-green-200" },
+  delivered: { label: "Entregado",   icon: <Truck className="w-3 h-3" />,        cls: "bg-purple-100 text-purple-700 border-purple-200" },
+  cancelled: { label: "Cancelado",   icon: <XCircle className="w-3 h-3" />,      cls: "bg-red-100 text-red-700 border-red-200" },
+};
 
 async function fetchMyOrders() {
   const res = await fetch("/api/auth/orders", { credentials: "include" });
@@ -99,30 +121,24 @@ export default function Orders() {
           </div>
         ) : (
           <div className="space-y-6">
-            {orders.map((order: any) => (
+            {orders.map((order: any) => {
+              const statusCfg = STATUS_CONFIG[order.status] ?? { label: order.status, icon: null, cls: "bg-gray-100 text-gray-700 border-gray-200" };
+              return (
               <div
                 key={order.id}
                 className="bg-white rounded-xl p-6 shadow-sm border border-border/50 hover:shadow-md transition-shadow flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 <div className="space-y-1">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className="font-display font-bold text-lg">{order.orderNumber || `#${order.id}`}</span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                      order.status === "pending"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : order.status === "cancelled"
-                        ? "bg-red-100 text-red-700"
-                        : "bg-green-100 text-green-700"
-                    }`}>
-                      {order.status === "pending" ? "Pendiente" : order.status === "cancelled" ? "Cancelado" : "Completado"}
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border flex items-center gap-1 ${statusCfg.cls}`}>
+                      {statusCfg.icon}{statusCfg.label}
                     </span>
                   </div>
                   <div className="flex items-center text-sm text-muted-foreground gap-4 flex-wrap">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5" />
-                      {order.createdAt
-                        ? format(new Date(Number(order.createdAt) * 1000), "d 'de' MMMM yyyy", { locale: es })
-                        : "N/A"}
+                      {format(parseOrderDate(order.createdAt), "d 'de' MMMM yyyy, HH:mm", { locale: es })}
                     </span>
                     <span>•</span>
                     <span className="font-semibold text-foreground">${Number(order.total).toFixed(2)}</span>
@@ -130,11 +146,14 @@ export default function Orders() {
                     <span className="capitalize">{order.orderType === "delivery" ? "A domicilio" : "Recoger en tienda"}</span>
                   </div>
                 </div>
-                <Button variant="outline" className="group shrink-0">
-                  Ver Detalles <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
+                <Link href={`/pedido/${order.orderNumber || order.id}`}>
+                  <Button variant="outline" className="group shrink-0">
+                    Ver Estado <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </Link>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

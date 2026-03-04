@@ -1,6 +1,7 @@
 ﻿import type { Express, Request, Response, NextFunction } from "express";
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import { storage } from "./storage";
+import { addAdminClient, addKitchenClient, broadcastOrderUpdate } from "./sse";
 import path from "path";
 import fs from "fs";
 
@@ -361,10 +362,49 @@ export function registerAdminRoutes(app: Express) {
       const { status } = req.body;
       const validStatuses = ["pending", "confirmed", "preparing", "ready", "delivered", "cancelled"];
       if (!validStatuses.includes(status)) {
-        return res.status(400).json({ message: "Estado invÃ¡lido" });
+        return res.status(400).json({ message: "Estado inválido" });
       }
-      const order = await storage.updateOrderStatus(Number(req.params.id), status);
-      if (!order) return res.status(404).json({ message: "Pedido no encontrado" });
+      const orderId = Number(req.params.id);
+      const currentOrder = await storage.getOrder(orderId);
+      if (!currentOrder) return res.status(404).json({ message: "Pedido no encontrado" });
+
+      const adminUser = (req as any).adminUser || await storage.getAdminById((req.session as any).adminUserId);
+      if (!adminUser) return res.status(401).json({ message: "No autorizado" });
+
+      // Employee role can only move: pending→confirmed, confirmed→preparing, preparing→ready
+      // Cannot cancel, cannot go back
+      const userLevel = ROLE_LEVEL[adminUser.role] ?? 0;
+      if (userLevel < ROLE_LEVEL.editor) {
+        const allowed: Record<string, string[]> = {
+          pending: ["confirmed"],
+          confirmed: ["preparing"],
+          preparing: ["ready"],
+        };
+        if (!allowed[currentOrder.status]?.includes(status)) {
+          return res.status(403).json({ message: "No tienes permiso para este cambio de estado" });
+        }
+      }
+
+      const order = await storage.updateOrderStatus(
+        orderId,
+        status,
+        status === "confirmed" ? adminUser.id : undefined,
+      );
+
+      // Immutable audit log
+      await storage.createAuditLog({
+        orderId,
+        adminId: adminUser.id,
+        adminName: adminUser.name,
+        adminRole: adminUser.role,
+        oldStatus: currentOrder.status,
+        newStatus: status,
+        ipAddress: req.ip ?? "",
+      }).catch(() => {}); // never fail the request if audit log fails
+
+      // Real-time broadcast
+      broadcastOrderUpdate(orderId, status, order);
+
       return res.json(order);
     } catch (e: any) {
       return res.status(500).json({ message: e.message });
@@ -690,6 +730,117 @@ export function registerAdminRoutes(app: Express) {
       const deleted = await storage.deleteAdmin(id);
       if (!deleted) return res.status(404).json({ message: "Usuario no encontrado" });
       return res.json({ ok: true });
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ══════ AUDIT LOG (read-only, immutable) ══════
+  app.get("/api/admin/orders/:id/audit", requireRole("owner", "admin"), async (req: Request, res: Response) => {
+    try {
+      const logs = await storage.getAuditLogs(Number(req.params.id));
+      return res.json(logs);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/admin/audit", requireRole("owner", "admin"), async (req: Request, res: Response) => {
+    try {
+      const limit = Math.min(Number(req.query.limit ?? 200), 500);
+      const logs = await storage.getAllAuditLogs(limit);
+      return res.json(logs);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ══════ REAL-TIME SSE — Admin panel ══════
+  app.get("/api/admin/events", requireAdmin, (req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // Nginx/Render: disable response buffering
+    res.flushHeaders();
+    res.write("event: connected\ndata: ok\n\n");
+    addAdminClient(res);
+  });
+
+  // ══════ KITCHEN VIEW — SSE + active orders ══════
+  app.get("/api/kitchen/events", requireAdmin, (req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders();
+    res.write("event: connected\ndata: ok\n\n");
+    addKitchenClient(res);
+  });
+
+  app.get("/api/kitchen/orders", requireAdmin, async (_req, res) => {
+    try {
+      const orders = await storage.getOrdersForKitchen();
+      return res.json(orders);
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ══════ CSV STOCK IMPORT ══════
+  // Format: id,new_stock  OR  name,new_stock  (header row optional)
+  // Accepts JSON body { csv: "..." } or plain text body
+  app.post("/api/admin/stock-import", requireRole("owner", "admin"), async (req: Request, res: Response) => {
+    try {
+      let csvText: string =
+        typeof req.body === "string"
+          ? req.body
+          : (req.body?.csv ?? req.body?.data ?? "");
+      if (!csvText) return res.status(400).json({ message: "CSV vacío. Envía { csv: '...' } en el body" });
+
+      const lines = csvText.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      if (!lines.length) return res.status(400).json({ message: "CSV sin datos" });
+
+      // Skip header row if present
+      let startIdx = 0;
+      const firstLineLower = lines[0].toLowerCase();
+      if (firstLineLower.includes("id") || firstLineLower.includes("name") || firstLineLower.includes("nombre") || firstLineLower.includes("stock")) {
+        startIdx = 1;
+      }
+
+      const results: Array<{ ref: string; status: "ok" | "error"; reason?: string }> = [];
+      const allProducts = await storage.getProducts();
+
+      for (let i = startIdx; i < lines.length; i++) {
+        const cols = lines[i].split(",").map((c: string) => c.trim().replace(/^["']|["']$/g, ""));
+        if (cols.length < 2) {
+          results.push({ ref: lines[i], status: "error", reason: "Formato inválido (se esperan 2 columnas)" });
+          continue;
+        }
+        const [ref, rawStock] = cols;
+        const newStock = parseInt(rawStock, 10);
+        if (isNaN(newStock) || newStock < 0) {
+          results.push({ ref, status: "error", reason: `Stock inválido: "${rawStock}"` });
+          continue;
+        }
+        const cappedStock = Math.min(newStock, 9999);
+
+        // Match by numeric ID or by name (exact, case-insensitive)
+        const numId = Number(ref);
+        const product =
+          (!isNaN(numId) && allProducts.find(p => p.id === numId)) ||
+          allProducts.find(p => p.name.toLowerCase() === ref.toLowerCase());
+
+        if (!product) {
+          results.push({ ref, status: "error", reason: "Producto no encontrado" });
+          continue;
+        }
+        await storage.updateProduct(product.id, { stock: cappedStock });
+        results.push({ ref: `#${product.id} — ${product.name}`, status: "ok" });
+      }
+
+      const ok = results.filter(r => r.status === "ok").length;
+      const errors = results.filter(r => r.status === "error").length;
+      return res.json({ updated: ok, errors, results });
     } catch (e: any) {
       return res.status(500).json({ message: e.message });
     }

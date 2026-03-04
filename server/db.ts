@@ -171,6 +171,8 @@ if (isMySQL) {
           -- order_items: variant info columns
           BEGIN ALTER TABLE order_items ADD COLUMN variant_label TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
           BEGIN ALTER TABLE order_items ADD COLUMN item_comment TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+          -- orders: accepted_by (admin who confirmed the order)
+          BEGIN ALTER TABLE orders ADD COLUMN accepted_by INT; EXCEPTION WHEN duplicate_column THEN NULL; END;
         END $$;
       `);
       // Product variants table
@@ -185,6 +187,21 @@ if (isMySQL) {
           sort_order INT NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
+      `);
+      // Audit log table — IMMUTABLE (never delete or update rows)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS order_audit_log (
+          id SERIAL PRIMARY KEY,
+          order_id INT NOT NULL,
+          admin_id INT NOT NULL,
+          admin_name TEXT NOT NULL,
+          admin_role TEXT NOT NULL,
+          old_status TEXT NOT NULL,
+          new_status TEXT NOT NULL,
+          ip_address TEXT,
+          created_at INT
+        );
+        CREATE INDEX IF NOT EXISTS idx_audit_order_id ON order_audit_log(order_id);
       `);
       // Seed default categories if not yet set
       await client.query(`

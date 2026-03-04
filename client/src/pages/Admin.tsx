@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useAdminSSE } from "@/hooks/use-admin-sse";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -67,6 +68,11 @@ import {
   Folders,
   Printer,
   Crown,
+  Upload,
+  ChefHat,
+  History,
+  AlertCircle,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -130,7 +136,7 @@ interface Product {
   imageUrl: string;
 }
 
-type TabKey = "dashboard" | "products" | "categories" | "orders" | "settings" | "users";
+type TabKey = "dashboard" | "products" | "categories" | "orders" | "settings" | "users" | "audit";
 
 interface DashboardStats {
   totalRevenue: number;
@@ -1507,6 +1513,162 @@ function OrdersTab() {
   );
 }
 
+// ── Audit Log Tab ───────────────────────────────────────────────────────────
+function AuditTab() {
+  const { toast } = useToast();
+  const [csvText, setCsvText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ updated: number; errors: number; results: Array<{ id?: number; name?: string; stock?: number; error?: string }> } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const auditQuery = useQuery({
+    queryKey: ["/api/admin/audit"],
+    queryFn: async () => {
+      const res = await apiFetch("/api/admin/audit?limit=200");
+      return res as Array<{ id: number; orderNumber?: string; adminName: string; adminRole: string; oldStatus: string; newStatus: string; createdAt: number | string }>;
+    },
+  });
+
+  async function handleImport() {
+    if (!csvText.trim()) { toast({ title: "CSV vacío", description: "Pega el contenido CSV primero.", variant: "destructive" }); return; }
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const res = await apiFetch("/api/admin/stock-import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ csv: csvText }) });
+      setImportResult(res);
+      toast({ title: `Stock actualizado: ${res.updated} productos`, description: res.errors > 0 ? `${res.errors} errores` : "Sin errores" });
+    } catch (e: any) {
+      toast({ title: "Error al importar", description: e.message, variant: "destructive" });
+    } finally { setImporting(false); }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setCsvText(ev.target?.result as string);
+    reader.readAsText(file);
+  }
+
+  const STATUS_COLORS: Record<string, string> = {
+    pending: "bg-amber-100 text-amber-700",
+    confirmed: "bg-blue-100 text-blue-700",
+    preparing: "bg-orange-100 text-orange-700",
+    ready: "bg-green-100 text-green-700",
+    delivered: "bg-emerald-100 text-emerald-700",
+    cancelled: "bg-red-100 text-red-700",
+  };
+
+  const STATUS_ES: Record<string, string> = {
+    pending: "Pendiente", confirmed: "Confirmado", preparing: "Preparando",
+    ready: "Listo", delivered: "Entregado", cancelled: "Cancelado",
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* CSV Stock Import */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+          <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center"><Upload className="w-4 h-4 text-emerald-600" /></div>
+          <div>
+            <h2 className="font-semibold text-slate-800">Importar Stock (CSV)</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Formato: <code className="bg-slate-100 px-1 rounded">id,stock</code> o <code className="bg-slate-100 px-1 rounded">nombre,stock</code> — una fila por producto</p>
+          </div>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="flex gap-3">
+            <textarea
+              className="flex-1 min-h-[120px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              placeholder={"id,stock\n1,15\n2,8\nPastel de Chocolate,20"}
+              value={csvText}
+              onChange={(e) => setCsvText(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="w-4 h-4 mr-2" />Abrir archivo CSV
+            </Button>
+            <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileChange} />
+            <Button onClick={handleImport} disabled={importing} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {importing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              Importar
+            </Button>
+          </div>
+          {importResult && (
+            <div className="rounded-xl border bg-slate-50 p-4 text-sm space-y-2">
+              <div className="flex items-center gap-2 font-medium">
+                {importResult.errors === 0 ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <AlertCircle className="w-4 h-4 text-amber-500" />}
+                <span>{importResult.updated} actualizados · {importResult.errors} errores</span>
+              </div>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {importResult.results.map((r, i) => (
+                  <div key={i} className={`flex justify-between px-3 py-1 rounded-lg text-xs ${'error' in r ? 'bg-red-50 text-red-700' : 'bg-white border border-slate-100'}`}>
+                    <span>{r.name ?? `ID ${r.id}`}</span>
+                    {'error' in r ? <span className="text-red-500">{r.error}</span> : <span className="font-medium">stock → {r.stock}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Audit Log */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+          <div className="w-9 h-9 bg-violet-50 rounded-xl flex items-center justify-center"><History className="w-4 h-4 text-violet-600" /></div>
+          <div>
+            <h2 className="font-semibold text-slate-800">Registro de Auditoría</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Historial inmutable de cambios de estado (últimas 200 entradas)</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          {auditQuery.isLoading ? (
+            <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+          ) : auditQuery.isError ? (
+            <div className="flex items-center justify-center py-12 text-sm text-red-500">Error al cargar registros</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  {["Pedido", "Cambio", "Responsable", "Rol", "Fecha"].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {(auditQuery.data ?? []).map((entry) => {
+                  const d = entry.createdAt ? new Date(typeof entry.createdAt === "number" ? entry.createdAt * 1000 : entry.createdAt) : null;
+                  return (
+                    <tr key={entry.id} className="hover:bg-slate-50/50">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{entry.orderNumber ?? `#${entry.id}`}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_COLORS[entry.oldStatus] ?? 'bg-slate-100 text-slate-600'}`}>{STATUS_ES[entry.oldStatus] ?? entry.oldStatus}</span>
+                          <ChevronRight className="w-3 h-3 text-slate-400" />
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_COLORS[entry.newStatus] ?? 'bg-slate-100 text-slate-600'}`}>{STATUS_ES[entry.newStatus] ?? entry.newStatus}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700 font-medium">{entry.adminName}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-medium">{entry.adminRole}</span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 text-xs">{d ? d.toLocaleString("es-MX") : "—"}</td>
+                    </tr>
+                  );
+                })}
+                {(auditQuery.data ?? []).length === 0 && (
+                  <tr><td colSpan={5} className="text-center py-12 text-slate-400">Sin registros aún</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // MAIN ADMIN PAGE
 export default function Admin() {
   const [, setLocation] = useLocation();
@@ -1514,6 +1676,9 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<TabKey>("products");
   const [checking, setChecking] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Real-time SSE: auto-refreshes order queries when new orders arrive
+  useAdminSSE();
 
   useEffect(() => {
     apiFetch("/api/admin/me")
@@ -1560,6 +1725,7 @@ export default function Admin() {
     { key: "categories", label: "Categorias", icon: Folders, roles: ["admin", "editor", "owner"] },
     { key: "settings", label: "Configuracion", icon: Settings, roles: ["admin", "editor", "owner"] },
     { key: "users", label: "Usuarios", icon: Users, roles: ["admin", "owner"] },
+    { key: "audit", label: "Auditoría", icon: History, roles: ["admin", "owner"] },
   ];
 
   const visibleNav = navItems.filter((item) => item.roles.includes(user.role));
@@ -1603,8 +1769,11 @@ export default function Admin() {
       </nav>
 
       <div className="border-t border-slate-100 p-4">
-        <button onClick={() => setLocation("/")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors mb-3">
+        <button onClick={() => setLocation("/")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors">
           <ExternalLink className="w-4 h-4" />Ver sitio web
+        </button>
+        <button onClick={() => window.open("/cocina", "_blank")} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 transition-colors mb-3">
+          <ChefHat className="w-4 h-4" />Vista Cocina
         </button>
         <div className="bg-slate-50 rounded-xl p-3">
           <div className="flex items-center gap-3">
@@ -1667,7 +1836,7 @@ export default function Admin() {
             <div className="flex items-center gap-2 text-sm">
               <Home className="w-4 h-4 text-slate-400" />
               <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-              <span className="text-slate-700 font-medium">{activeTab === "dashboard" ? "Dashboard" : activeTab === "products" ? "Productos" : activeTab === "orders" ? "Pedidos" : activeTab === "categories" ? "Categorias" : activeTab === "settings" ? "Configuracion" : "Usuarios"}</span>
+              <span className="text-slate-700 font-medium">{activeTab === "dashboard" ? "Dashboard" : activeTab === "products" ? "Productos" : activeTab === "orders" ? "Pedidos" : activeTab === "categories" ? "Categorias" : activeTab === "settings" ? "Configuracion" : activeTab === "audit" ? "Auditoría" : "Usuarios"}</span>
             </div>
             <p className="text-xs text-slate-400">Conectado como <strong className="text-slate-600">{user.email}</strong></p>
           </div>
@@ -1693,6 +1862,7 @@ export default function Admin() {
           {activeTab === "categories" && <CategoriesTab />}
           {activeTab === "settings" && <SettingsTab user={user} />}
           {activeTab === "users" && <UsersTab />}
+          {activeTab === "audit" && <AuditTab />}
         </div>
       </main>
     </div>

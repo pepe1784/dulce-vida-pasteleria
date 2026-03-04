@@ -129,6 +129,25 @@ export function initializeSqlite(dbPath: string = "./dev.db") {
   try { db.exec(`ALTER TABLE order_items ADD COLUMN variant_label TEXT;`); } catch {}
   try { db.exec(`ALTER TABLE order_items ADD COLUMN item_comment TEXT;`); } catch {}
 
+  // Accepted_by on orders (tracks which admin confirmed the order)
+  try { db.exec(`ALTER TABLE orders ADD COLUMN accepted_by INTEGER;`); } catch {}
+
+  // Audit log — IMMUTABLE (no delete/update should ever be called on this table)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      admin_id INTEGER NOT NULL,
+      admin_name TEXT NOT NULL,
+      admin_role TEXT NOT NULL,
+      old_status TEXT NOT NULL,
+      new_status TEXT NOT NULL,
+      ip_address TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_order_id ON order_audit_log(order_id);
+  `);
+
   // Product variants table
   db.exec(`
     CREATE TABLE IF NOT EXISTS product_variants (

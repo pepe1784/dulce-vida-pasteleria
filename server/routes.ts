@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
+import { broadcastNewOrder } from "./sse";
 import { api } from "@shared/routes";
 import type { InsertOrderItem } from "@shared/schema";
 
@@ -141,6 +142,9 @@ export async function registerRoutes(
         }
       }
 
+      // Broadcast new order to admin SSE clients
+      broadcastNewOrder(order);
+
       return res.status(201).json(order);
     } catch (e: any) {
       return res.status(500).json({ message: e.message });
@@ -155,6 +159,24 @@ export async function registerRoutes(
       const order = await storage.getOrderWithItems(orderId);
       if (!order) return res.status(404).json({ message: "Pedido no encontrado" });
       if (order.status !== "pending") return res.status(400).json({ message: "Solo se puede cancelar un pedido pendiente" });
+
+      // IDOR protection: only allow cancellation if:
+      // 1. The requesting Google customer owns the order, OR
+      // 2. The order was placed within the last 10 minutes (anonymous checkout window)
+      const sessionCustomer = (req as any).session?.customer;
+      if (sessionCustomer?.googleId) {
+        // Authenticated customer: must own the order
+        if ((order as any).customerGoogleId && (order as any).customerGoogleId !== sessionCustomer.googleId) {
+          return res.status(403).json({ message: "No autorizado" });
+        }
+      } else {
+        // Anonymous: only within 10-minute safety window after order creation
+        const orderAge = Date.now() - new Date((order as any).createdAt ?? 0).getTime();
+        if (orderAge > 10 * 60 * 1000) {
+          return res.status(403).json({ message: "La ventana de cancelación ha expirado" });
+        }
+      }
+
       // Restore stock
       if (order.items) {
         for (const item of order.items) {
@@ -166,6 +188,41 @@ export async function registerRoutes(
       }
       await storage.updateOrderStatus(orderId, "cancelled");
       return res.json({ ok: true });
+    } catch (e: any) {
+      return res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ── Estado público de un pedido (por número de orden o ID) ──────────────
+  // Solo devuelve campos no sensibles: estado, número, tipo, total, ítems (nombre+cantidad)
+  app.get("/api/orders/status/:orderRef", async (req, res) => {
+    try {
+      const ref = String(req.params.orderRef).trim();
+      if (!ref) return res.status(400).json({ message: "Referencia requerida" });
+
+      let order: any;
+      if (/^EP-/i.test(ref)) {
+        order = await storage.getOrderByNumber(ref);
+      } else {
+        const id = Number(ref);
+        if (!isNaN(id) && id > 0) order = await storage.getOrderWithItems(id);
+      }
+      if (!order) return res.status(404).json({ message: "Pedido no encontrado" });
+
+      // Strip sensitive customer data  —  only safe public fields
+      return res.json({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        orderType: order.orderType,
+        total: order.total,
+        createdAt: order.createdAt,
+        items: (order.items ?? []).map((i: any) => ({
+          productName: i.productName,
+          quantity: i.quantity,
+          variantLabel: i.variantLabel ?? null,
+        })),
+      });
     } catch (e: any) {
       return res.status(500).json({ message: e.message });
     }
