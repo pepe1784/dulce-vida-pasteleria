@@ -73,6 +73,7 @@ import {
   History,
   AlertCircle,
   CheckCircle2,
+  Download,
   type LucideIcon,
 } from "lucide-react";
 
@@ -1514,10 +1515,11 @@ function OrdersTab() {
 }
 
 // ── Audit Log Tab ───────────────────────────────────────────────────────────
-function AuditTab() {
+function AuditTab({ user }: { user: AdminUser }) {
   const { toast } = useToast();
   const [csvText, setCsvText] = useState("");
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [importResult, setImportResult] = useState<{ updated: number; errors: number; results: Array<{ id?: number; name?: string; stock?: number; error?: string }> } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1550,6 +1552,28 @@ function AuditTab() {
     reader.readAsText(file);
   }
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const products = await apiFetch("/api/admin/products") as Array<{ id: number; name: string; category: string; price: string; stock: number }>;
+      const header = "id,nombre,categoria,precio,stock";
+      const rows = products.map(p =>
+        [p.id, `"${(p.name ?? "").replace(/"/g, '""')}"`, `"${(p.category ?? "").replace(/"/g, '""')}"`, p.price ?? 0, p.stock ?? 0].join(",")
+      );
+      const csv = [header, ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `productos_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: `CSV exportado — ${products.length} productos` });
+    } catch (e: any) {
+      toast({ title: "Error al exportar", description: e.message, variant: "destructive" });
+    } finally { setExporting(false); }
+  }
+
   const STATUS_COLORS: Record<string, string> = {
     pending: "bg-amber-100 text-amber-700",
     confirmed: "bg-blue-100 text-blue-700",
@@ -1566,6 +1590,36 @@ function AuditTab() {
 
   return (
     <div className="space-y-8">
+
+      {/* ── Export catalogue (owner only) ── */}
+      {user.role === "owner" && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+            <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center"><Download className="w-4 h-4 text-indigo-600" /></div>
+            <div>
+              <h2 className="font-semibold text-slate-800">Exportar Catálogo</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Descarga todos los productos con sus IDs, precios y stock actual en formato CSV</p>
+            </div>
+          </div>
+          <div className="px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-1 text-sm text-slate-500 leading-relaxed">
+              El archivo incluye las columnas <code className="bg-slate-100 px-1 rounded text-slate-700">id, nombre, categoria, precio, stock</code>.<br />
+              Úsalo como referencia de IDs para luego hacer la importación masiva de stock.
+            </div>
+            <Button
+              onClick={handleExport}
+              disabled={exporting}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white flex-shrink-0 w-full sm:w-auto"
+            >
+              {exporting
+                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                : <Download className="w-4 h-4 mr-2" />}
+              Descargar CSV
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* CSV Stock Import */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
@@ -1862,7 +1916,7 @@ export default function Admin() {
           {activeTab === "categories" && <CategoriesTab />}
           {activeTab === "settings" && <SettingsTab user={user} />}
           {activeTab === "users" && <UsersTab />}
-          {activeTab === "audit" && <AuditTab />}
+          {activeTab === "audit" && <AuditTab user={user} />}
         </div>
       </main>
     </div>
