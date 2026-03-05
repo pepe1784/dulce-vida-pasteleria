@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+const fs = require("fs");
+const path = require("path");
+
+const content = `import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -132,7 +135,7 @@ async function fetchKitchenOrders(): Promise<KitchenOrder[]> {
 }
 
 async function advanceStatus(orderId: number, status: string): Promise<void> {
-  const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+  const res = await fetch(\`/api/admin/orders/\${orderId}/status\`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -244,7 +247,7 @@ export default function Kitchen() {
             <div>
               <span className="font-bold text-slate-800 text-sm leading-none block">Vista Cocina</span>
               <span className="text-[11px] text-slate-400 leading-none block mt-0.5">
-                {isLoading ? "Cargando..." : `${totalActive} pedido${totalActive !== 1 ? "s" : ""} activo${totalActive !== 1 ? "s" : ""}`}
+                {isLoading ? "Cargando..." : \`\${totalActive} pedido\${totalActive !== 1 ? "s" : ""} activo\${totalActive !== 1 ? "s" : ""}\`}
               </span>
             </div>
           </div>
@@ -278,18 +281,18 @@ export default function Kitchen() {
               <button
                 key={col}
                 onClick={() => setActiveCol(col)}
-                className={`relative flex flex-col items-center gap-0.5 py-3 text-xs font-semibold transition-colors
-                  ${isActive ? "text-slate-800" : "text-slate-400 hover:text-slate-600"}`}
+                className={\`relative flex flex-col items-center gap-0.5 py-3 text-xs font-semibold transition-colors
+                  \${isActive ? "text-slate-800" : "text-slate-400 hover:text-slate-600"}\`}
               >
                 <span>{def.mobileLabel}</span>
                 {count > 0 && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full
-                    ${isActive ? `${def.badgeBg} ${def.badgeText}` : "bg-slate-100 text-slate-500"}`}>
+                  <span className={\`text-[10px] font-bold px-1.5 py-0.5 rounded-full
+                    \${isActive ? \`\${def.badgeBg} \${def.badgeText}\` : "bg-slate-100 text-slate-500"}\`}>
                     {count}
                   </span>
                 )}
                 {isActive && (
-                  <span className={`absolute bottom-0 left-6 right-6 h-0.5 rounded-t ${ACCENT_BAR[col]}`} />
+                  <span className={\`absolute bottom-0 left-6 right-6 h-0.5 rounded-t \${ACCENT_BAR[col]}\`} />
                 )}
               </button>
             );
@@ -353,10 +356,10 @@ function KanbanColumn({
   return (
     <div className="flex flex-col gap-3">
       {/* Column header pill */}
-      <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border ${def.headerBg}`}>
+      <div className={\`flex items-center gap-2 px-3 py-2.5 rounded-xl border \${def.headerBg}\`}>
         {def.icon}
         <span className="font-semibold text-slate-700 text-sm">{def.label}</span>
-        <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${def.badgeBg} ${def.badgeText}`}>
+        <span className={\`ml-auto text-xs font-bold px-2 py-0.5 rounded-full \${def.badgeBg} \${def.badgeText}\`}>
           {orders.length}
         </span>
       </div>
@@ -398,13 +401,13 @@ function OrderCard({
   const elapsed = formatDistanceToNow(orderDate, { locale: es, addSuffix: false });
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-slate-200 border-l-4 ${def.cardBorderL} overflow-hidden`}>
+    <div className={\`bg-white rounded-xl shadow-sm border border-slate-200 border-l-4 \${def.cardBorderL} overflow-hidden\`}>
       {/* Card top: order number + elapsed */}
       <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
         <div>
           <p className="font-mono font-bold text-slate-800 text-sm">{order.orderNumber}</p>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${def.badgeBg} ${def.badgeText}`}>
+            <span className={\`text-[11px] font-semibold px-1.5 py-0.5 rounded-md \${def.badgeBg} \${def.badgeText}\`}>
               {def.label}
             </span>
             {order.orderType === "delivery" ? (
@@ -419,8 +422,8 @@ function OrderCard({
           </div>
         </div>
         {/* Elapsed badge */}
-        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg flex-shrink-0
-          ${isLate ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"}`}>
+        <span className={\`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-lg flex-shrink-0
+          \${isLate ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"}\`}>
           <Clock className="w-3 h-3" />
           {elapsed}
         </span>
@@ -467,8 +470,8 @@ function OrderCard({
           <button
             onClick={() => onAdvance(order)}
             disabled={isPending}
-            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white transition-all
-              ${def.btnBg} ${def.btnHover} active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed`}
+            className={\`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold text-white transition-all
+              \${def.btnBg} \${def.btnHover} active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed\`}
           >
             {isPending
               ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -481,3 +484,7 @@ function OrderCard({
     </div>
   );
 }
+`;
+
+fs.writeFileSync(path.join("client/src/pages/Kitchen.tsx"), content, "utf8");
+console.log("Written", content.split("\n").length, "lines");
