@@ -1620,7 +1620,8 @@ function AuditTab({ user }: { user: AdminUser }) {
         </div>
       )}
 
-      {/* CSV Stock Import */}
+      {/* CSV Stock Import — owner only */}
+      {user.role === "owner" && (
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm">
         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
           <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center"><Upload className="w-4 h-4 text-emerald-600" /></div>
@@ -1666,6 +1667,7 @@ function AuditTab({ user }: { user: AdminUser }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Audit Log */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm">
